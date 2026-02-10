@@ -26,10 +26,12 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DesktopHome(
     viewModel: MainViewModel,
@@ -59,7 +61,7 @@ fun DesktopHome(
     Surface(
         color = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        shape = MaterialTheme.shapes.large,
+        shape = RoundedCornerShape(22.dp),
         modifier = Modifier.fillMaxSize().graphicsLayer {
             scaleX = scale
             scaleY = scale
@@ -86,32 +88,80 @@ fun DesktopHome(
                          Text("本机 IP: ${platform.ipAddress}", style = MaterialTheme.typography.bodySmall)
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Text("连接方式", style = MaterialTheme.typography.labelSmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = state.mode == ConnectionMode.Wifi,
-                            onClick = { viewModel.setMode(ConnectionMode.Wifi) },
-                            label = { Text("Wi-Fi") },
-                            leadingIcon = { if (state.mode == ConnectionMode.Wifi) Icon(Icons.Filled.Check, null) else null }
-                        )
-                        FilterChip(
-                            selected = state.mode == ConnectionMode.Usb,
-                            onClick = { viewModel.setMode(ConnectionMode.Usb) },
-                            label = { Text("USB") },
-                            leadingIcon = { if (state.mode == ConnectionMode.Usb) Icon(Icons.Filled.Check, null) else null }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            var expanded by remember { mutableStateOf(false) }
+                            ExposedDropdownMenuBox(
+                                expanded = expanded,
+                                onExpandedChange = { expanded = it },
+                                modifier = Modifier.width(200.dp)
+                            ) {
+                                OutlinedTextField(
+                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                    readOnly = true,
+                                    value = when (state.mode) {
+                                        ConnectionMode.Wifi -> "Wi-Fi (TCP)"
+                                        ConnectionMode.WifiUdp -> "Wi-Fi (UDP)"
+                                        ConnectionMode.Usb -> "USB (ADB)"
+                                    },
+                                    onValueChange = {},
+                                    label = { Text("连接方式") },
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(
+                                            expanded = expanded
+                                        )
+                                    },
+                                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                    textStyle = MaterialTheme.typography.bodySmall,
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                                DropdownMenu(
+                                    expanded = expanded,
+                                    onDismissRequest = { expanded = false },
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Wi-Fi (TCP)") },
+                                        onClick = {
+                                            viewModel.setMode(ConnectionMode.Wifi)
+                                            expanded = false
+                                        },
+                                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Wi-Fi (UDP)") },
+                                        onClick = {
+                                            viewModel.setMode(ConnectionMode.WifiUdp)
+                                            expanded = false
+                                        },
+                                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("USB (ADB)") },
+                                        onClick = {
+                                            viewModel.setMode(ConnectionMode.Usb)
+                                            expanded = false
+                                        },
+                                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                                    )
+                                }
+                            }
+                        }
+
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedTextField(
+                            value = state.port,
+                            onValueChange = { viewModel.setPort(it) },
+                            label = { Text("端口") },
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = MaterialTheme.typography.bodySmall,
+                            singleLine = true,
+                            shape = RoundedCornerShape(16.dp)
                         )
                     }
-                    
-                    Spacer(modifier = Modifier.height(4.dp))
-                    OutlinedTextField(
-                        value = state.port,
-                        onValueChange = { viewModel.setPort(it) },
-                        label = { Text("端口") },
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.bodySmall,
-                        singleLine = true
-                    )
                     
                     Spacer(modifier = Modifier.height(8.dp))
                     
@@ -121,8 +171,8 @@ fun DesktopHome(
                         StreamState.Streaming -> "正在串流"
                         StreamState.Error -> "错误"
                     }
-                    val statusColor = if (state.streamState == StreamState.Connecting) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
-                    Text("状态: $statusText", style = MaterialTheme.typography.bodyMedium, color = statusColor)
+
+                    Text("状态: $statusText", style = MaterialTheme.typography.bodyMedium, color = Color.Unspecified)
 
                     if (state.errorMessage != null) {
                         Spacer(modifier = Modifier.height(4.dp))
@@ -134,7 +184,8 @@ fun DesktopHome(
             // 中间：控制与可视化
             Card(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                shape = RoundedCornerShape(22.dp)
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     val isRunning = state.streamState == StreamState.Streaming
@@ -171,60 +222,54 @@ fun DesktopHome(
                         ),
                         label = "ConnectionSpinner"
                     )
-                    val rotation = if (isConnecting) angle else 0f
                     
-                    var rippleTrigger by remember { mutableStateOf(0) }
-
-                    Box(contentAlignment = Alignment.Center) {
-                        WaterRippleEffect(
-                            trigger = rippleTrigger,
-                            modifier = Modifier.size(buttonSize),
-                            color = Color.White
-                        )
-
-                        IconButton(
-                            onClick = { 
-                                rippleTrigger++
-                                viewModel.toggleStream() 
-                            },
-                            modifier = Modifier.size(buttonSize).background(buttonColor, CircleShape)
-                        ) {
-                            val icon = when {
-                                isRunning -> Icons.Filled.MicOff
-                                isConnecting -> Icons.Filled.Refresh
-                                else -> Icons.Filled.Mic
+                    FloatingActionButton(
+                        onClick = {
+                            if (isRunning || isConnecting) {
+                                viewModel.stopStream()
+                            } else {
+                                viewModel.startStream()
                             }
-                            
+                        },
+                        containerColor = buttonColor,
+                        modifier = Modifier.size(buttonSize)
+                    ) {
+                        if (isConnecting) {
+                            Icon(Icons.Filled.Refresh, "连接中", modifier = Modifier.rotate(angle))
+                        } else {
                             Icon(
-                                icon,
-                                contentDescription = "Toggle Stream",
-                                modifier = Modifier.size(32.dp).rotate(rotation),
-                                tint = MaterialTheme.colorScheme.onPrimary
+                                if (isRunning) Icons.Filled.MicOff else Icons.Filled.Mic,
+                                contentDescription = if (isRunning) "停止" else "开始"
                             )
                         }
                     }
                 }
             }
 
-            // 右侧：系统操作
+            // 右侧：功能按钮
             Column(
-                modifier = Modifier.fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(0.3f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 窗口控制
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close")
-                }
-                IconButton(onClick = onMinimize) {
-                    Icon(Icons.Filled.Minimize, contentDescription = "Minimize")
+                FilledTonalIconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(Icons.Filled.Settings, "设置")
                 }
                 
                 Spacer(modifier = Modifier.weight(1f))
                 
-                // 设置
-                IconButton(onClick = onOpenSettings) {
-                    Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                IconButton(onClick = onMinimize) {
+                    Icon(Icons.Filled.Minimize, "最小化")
+                }
+                
+                IconButton(
+                    onClick = onClose,
+                    colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(Icons.Filled.Close, "关闭")
                 }
             }
         }

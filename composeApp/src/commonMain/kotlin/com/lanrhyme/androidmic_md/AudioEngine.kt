@@ -11,7 +11,15 @@ expect class AudioEngine() {
     // 错误信息流
     val lastError: Flow<String?>
     // 启动音频引擎
-    suspend fun start(ip: String, port: Int, mode: ConnectionMode, isClient: Boolean)
+    suspend fun start(
+        ip: String, 
+        port: Int, 
+        mode: ConnectionMode, 
+        isClient: Boolean,
+        sampleRate: SampleRate,
+        channelCount: ChannelCount,
+        audioFormat: AudioFormat
+    )
     // 停止音频引擎
     fun stop()
     // 设置是否启用本地监听（仅桌面端有效）

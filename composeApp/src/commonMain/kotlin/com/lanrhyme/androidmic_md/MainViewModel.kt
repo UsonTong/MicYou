@@ -8,8 +8,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class ConnectionMode {
-    Wifi, Usb
+enum class ConnectionMode(val label: String) {
+    Wifi( "Wi-Fi (TCP)"),
+    WifiUdp("Wi-Fi (UDP)"),
+    Usb("USB (ADB)")
 }
 
 enum class StreamState {
@@ -24,7 +26,10 @@ data class AppUiState(
     val errorMessage: String? = null,
     val themeMode: ThemeMode = ThemeMode.System,
     val seedColor: Long = 0xFF6750A4, // Default purple
-    val monitoringEnabled: Boolean = false
+    val monitoringEnabled: Boolean = false,
+    val sampleRate: SampleRate = SampleRate.Rate44100,
+    val channelCount: ChannelCount = ChannelCount.Mono,
+    val audioFormat: AudioFormat = AudioFormat.PCM_16BIT
 )
 
 class MainViewModel : ViewModel() {
@@ -46,6 +51,17 @@ class MainViewModel : ViewModel() {
         val savedThemeMode = try { ThemeMode.valueOf(savedThemeModeName) } catch(e: Exception) { ThemeMode.System }
         
         val savedSeedColor = settings.getLong("seed_color", 0xFF6750A4)
+        
+        val savedMonitoring = settings.getBoolean("monitoring_enabled", false)
+
+        val savedSampleRateName = settings.getString("sample_rate", SampleRate.Rate44100.name)
+        val savedSampleRate = try { SampleRate.valueOf(savedSampleRateName) } catch(e: Exception) { SampleRate.Rate44100 }
+
+        val savedChannelCountName = settings.getString("channel_count", ChannelCount.Mono.name)
+        val savedChannelCount = try { ChannelCount.valueOf(savedChannelCountName) } catch(e: Exception) { ChannelCount.Mono }
+
+        val savedAudioFormatName = settings.getString("audio_format", AudioFormat.PCM_16BIT.name)
+        val savedAudioFormat = try { AudioFormat.valueOf(savedAudioFormatName) } catch(e: Exception) { AudioFormat.PCM_16BIT }
 
         _uiState.update { 
             it.copy(
@@ -53,9 +69,15 @@ class MainViewModel : ViewModel() {
                 ipAddress = savedIp,
                 port = savedPort,
                 themeMode = savedThemeMode,
-                seedColor = savedSeedColor
+                seedColor = savedSeedColor,
+                monitoringEnabled = savedMonitoring,
+                sampleRate = savedSampleRate,
+                channelCount = savedChannelCount,
+                audioFormat = savedAudioFormat
             ) 
         }
+        
+        audioEngine.setMonitoring(savedMonitoring)
 
         viewModelScope.launch {
             audioEngine.streamState.collect { state ->
@@ -84,18 +106,21 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    private fun startStream() {
+    fun startStream() {
         val ip = _uiState.value.ipAddress
         val port = _uiState.value.port.toIntOrNull() ?: 6000
         val mode = _uiState.value.mode
         val isClient = getPlatform().type == PlatformType.Android
+        val sampleRate = _uiState.value.sampleRate
+        val channelCount = _uiState.value.channelCount
+        val audioFormat = _uiState.value.audioFormat
 
         viewModelScope.launch {
-            audioEngine.start(ip, port, mode, isClient)
+            audioEngine.start(ip, port, mode, isClient, sampleRate, channelCount, audioFormat)
         }
     }
 
-    private fun stopStream() {
+    fun stopStream() {
         audioEngine.stop()
     }
 
@@ -128,5 +153,20 @@ class MainViewModel : ViewModel() {
         _uiState.update { it.copy(monitoringEnabled = enabled) }
         settings.putBoolean("monitoring_enabled", enabled)
         audioEngine.setMonitoring(enabled)
+    }
+
+    fun setSampleRate(rate: SampleRate) {
+        _uiState.update { it.copy(sampleRate = rate) }
+        settings.putString("sample_rate", rate.name)
+    }
+
+    fun setChannelCount(count: ChannelCount) {
+        _uiState.update { it.copy(channelCount = count) }
+        settings.putString("channel_count", count.name)
+    }
+
+    fun setAudioFormat(format: AudioFormat) {
+        _uiState.update { it.copy(audioFormat = format) }
+        settings.putString("audio_format", format.name)
     }
 }

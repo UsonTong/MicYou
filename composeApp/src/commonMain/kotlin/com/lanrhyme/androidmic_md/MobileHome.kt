@@ -84,13 +84,19 @@ fun MobileHome(viewModel: MainViewModel) {
                         FilterChip(
                             selected = state.mode == ConnectionMode.Wifi,
                             onClick = { viewModel.setMode(ConnectionMode.Wifi) },
-                            label = { Text("Wi-Fi") },
+                            label = { Text("Wi-Fi (TCP)") },
                             leadingIcon = { if (state.mode == ConnectionMode.Wifi) Icon(Icons.Filled.Check, null) else null }
+                        )
+                        FilterChip(
+                            selected = state.mode == ConnectionMode.WifiUdp,
+                            onClick = { viewModel.setMode(ConnectionMode.WifiUdp) },
+                            label = { Text("Wi-Fi (UDP)") },
+                            leadingIcon = { if (state.mode == ConnectionMode.WifiUdp) Icon(Icons.Filled.Check, null) else null }
                         )
                         FilterChip(
                             selected = state.mode == ConnectionMode.Usb,
                             onClick = { viewModel.setMode(ConnectionMode.Usb) },
-                            label = { Text("USB") },
+                            label = { Text("USB (ADB)") },
                             leadingIcon = { if (state.mode == ConnectionMode.Usb) Icon(Icons.Filled.Check, null) else null }
                         )
                     }

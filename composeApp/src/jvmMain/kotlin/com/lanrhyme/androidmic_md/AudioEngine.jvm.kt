@@ -27,14 +27,21 @@ actual class AudioEngine actual constructor() {
     private val CHECK_1 = "AndroidMic1"
     private val CHECK_2 = "AndroidMic2"
     
+    private var serverSocket: ServerSocket? = null
+    private var monitoringLine: SourceDataLine? = null
+    
     @Volatile
     private var isMonitoring = false
 
-    actual fun setMonitoring(enabled: Boolean) {
-        isMonitoring = enabled
-    }
-
-    actual suspend fun start(ip: String, port: Int, mode: ConnectionMode, isClient: Boolean) {
+    actual suspend fun start(
+        ip: String, 
+        port: Int, 
+        mode: ConnectionMode, 
+        isClient: Boolean,
+        sampleRate: SampleRate,
+        channelCount: ChannelCount,
+        audioFormat: AudioFormat
+    ) {
         if (isClient) return 
         _lastError.value = null // 清除之前的错误
 
@@ -46,7 +53,6 @@ actual class AudioEngine actual constructor() {
                 _state.value = StreamState.Connecting
                 CoroutineScope(Dispatchers.IO).launch {
                     val selectorManager = SelectorManager(Dispatchers.IO)
-                    var serverSocket: ServerSocket? = null
                     
                     try {
                         serverSocket = aSocket(selectorManager).tcp().bind(port = port)
@@ -55,7 +61,7 @@ actual class AudioEngine actual constructor() {
                         // 可以选择是否显示监听成功信息，这里暂不视为错误
                         
                         while (isActive) {
-                            val socket = serverSocket.accept()
+                            val socket = serverSocket?.accept() ?: break
                             println("接受来自 ${socket.remoteAddress} 的连接")
                             _state.value = StreamState.Streaming
                             _lastError.value = null
@@ -106,8 +112,6 @@ actual class AudioEngine actual constructor() {
         output.writeFully(CHECK_2.encodeToByteArray())
         output.flush()
 
-        var line: SourceDataLine? = null
-        
         try {
             val lengthBytes = ByteArray(4)
             while (currentCoroutineContext().isActive) {
@@ -130,7 +134,7 @@ actual class AudioEngine actual constructor() {
                     val packet: AudioPacketMessage = proto.decodeFromByteArray(AudioPacketMessage.serializer(), packetBytes)
                     
                     // 设置音频输出
-                    if (line == null) {
+                    if (monitoringLine == null) {
                         val audioFormat = AudioFormat(
                             packet.sampleRate.toFloat(),
                             16,
@@ -140,13 +144,13 @@ actual class AudioEngine actual constructor() {
                         )
                         
                         val info = DataLine.Info(SourceDataLine::class.java, audioFormat)
-                        line = AudioSystem.getLine(info) as SourceDataLine
-                        line?.open(audioFormat)
-                        line?.start()
+                        monitoringLine = AudioSystem.getLine(info) as SourceDataLine
+                        monitoringLine?.open(audioFormat)
+                        monitoringLine?.start()
                     }
                     
                     if (isMonitoring) {
-                        line?.write(packet.buffer, 0, packet.buffer.size)
+                        monitoringLine?.write(packet.buffer, 0, packet.buffer.size)
                     }
                     
                     // 计算音频电平
@@ -157,8 +161,9 @@ actual class AudioEngine actual constructor() {
                 }
             }
         } finally {
-            line?.drain()
-            line?.close()
+            monitoringLine?.drain()
+            monitoringLine?.close()
+            monitoringLine = null
         }
     }
     
@@ -176,15 +181,31 @@ actual class AudioEngine actual constructor() {
 
     actual fun stop() {
         CoroutineScope(Dispatchers.IO).launch {
-            val jobToCancel = startStopMutex.withLock {
-                job?.also { it.cancel() }
-            }
-            jobToCancel?.join()
             startStopMutex.withLock {
-                if (job === jobToCancel) {
-                    job = null
-                }
+                serverSocket?.close()
+                job?.cancelAndJoin()
+                job = null
+                
+                // Stop monitoring
+                monitoringLine?.stop()
+                monitoringLine?.close()
+                monitoringLine = null
             }
+        }
+    }
+
+    actual fun setMonitoring(enabled: Boolean) {
+        this.isMonitoring = enabled
+        // If we are currently streaming and monitoring is toggled, we might need to start/stop the line
+        // But the main loop handles writing to monitoringLine if it exists.
+        // We can just rely on the loop to pick it up or re-initialize if needed.
+        // For simplicity, let's just update the flag. The loop will check the flag or we can init/deinit there.
+        // Ideally we should init/deinit immediately.
+        
+        if (!enabled) {
+             monitoringLine?.stop()
+             monitoringLine?.close()
+             monitoringLine = null
         }
     }
 }
