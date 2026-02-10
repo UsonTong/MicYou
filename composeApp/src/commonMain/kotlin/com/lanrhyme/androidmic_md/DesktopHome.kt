@@ -1,8 +1,15 @@
 package com.lanrhyme.androidmic_md
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Minimize
 import androidx.compose.material.icons.filled.Mic
@@ -12,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -24,11 +32,31 @@ fun DesktopHome(
     val state by viewModel.uiState.collectAsState()
     val audioLevel by viewModel.audioLevels.collectAsState(initial = 0f)
     val platform = remember { getPlatform() }
+    
+    // Startup Animation
+    var visible by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.9f,
+        animationSpec = tween(500)
+    )
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(500)
+    )
+    
+    LaunchedEffect(Unit) {
+        visible = true
+    }
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.fillMaxSize()
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxSize().graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+            this.alpha = alpha
+        }
     ) {
         Row(
             modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -49,7 +77,34 @@ fun DesktopHome(
                     SelectionContainer {
                          Text("本机 IP: ${platform.ipAddress}", style = MaterialTheme.typography.bodySmall)
                     }
-                    Text("监听端口: ${state.port}", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Text("连接方式", style = MaterialTheme.typography.labelSmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = state.mode == ConnectionMode.Wifi,
+                            onClick = { viewModel.setMode(ConnectionMode.Wifi) },
+                            label = { Text("Wi-Fi") },
+                            leadingIcon = { if (state.mode == ConnectionMode.Wifi) Icon(Icons.Filled.Check, null) else null }
+                        )
+                        FilterChip(
+                            selected = state.mode == ConnectionMode.Usb,
+                            onClick = { viewModel.setMode(ConnectionMode.Usb) },
+                            label = { Text("USB") },
+                            leadingIcon = { if (state.mode == ConnectionMode.Usb) Icon(Icons.Filled.Check, null) else null }
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = state.port,
+                        onValueChange = { viewModel.setPort(it) },
+                        label = { Text("端口") },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodySmall,
+                        singleLine = true
+                    )
+                    
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     val statusText = when(state.streamState) {
@@ -87,18 +142,20 @@ fun DesktopHome(
                     }
 
                     // 开关按钮
+                    val buttonSize by animateDpAsState(if (isRunning) 72.dp else 64.dp)
+                    val buttonColor by animateColorAsState(
+                        if (isRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                    )
+                    
                     IconButton(
                         onClick = { viewModel.toggleStream() },
-                        modifier = Modifier.size(64.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        )
+                        modifier = Modifier.size(buttonSize).background(buttonColor, CircleShape)
                     ) {
                         Icon(
                             if (isRunning) Icons.Filled.MicOff else Icons.Filled.Mic,
                             contentDescription = "Toggle Stream",
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(32.dp),
+                            tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 }
@@ -106,26 +163,22 @@ fun DesktopHome(
 
             // 右侧：系统操作
             Column(
-                modifier = Modifier.weight(0.5f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // 窗口控制
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    IconButton(onClick = onMinimize, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Filled.Minimize, contentDescription = "Minimize", modifier = Modifier.size(16.dp))
-                    }
-                    IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Filled.Close, contentDescription = "Close", modifier = Modifier.size(16.dp))
-                    }
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Filled.Close, contentDescription = "Close")
+                }
+                IconButton(onClick = onMinimize) {
+                    Icon(Icons.Filled.Minimize, contentDescription = "Minimize")
                 }
                 
                 Spacer(modifier = Modifier.weight(1f))
                 
                 // 设置
-                FilledTonalIconButton(
-                    onClick = onOpenSettings,
-                    modifier = Modifier.fillMaxWidth().height(48.dp)
-                ) {
+                IconButton(onClick = onOpenSettings) {
                     Icon(Icons.Filled.Settings, contentDescription = "Settings")
                 }
             }
