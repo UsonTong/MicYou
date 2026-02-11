@@ -600,15 +600,16 @@ actual class AudioEngine actual constructor() {
         }
 
         if (enableVAD) {
-            val threshold = vadThreshold.coerceIn(0, 100) / 100f
-            val speech = speechProbability?.let { it >= threshold } ?: run {
+            val sensitivity = vadThreshold.coerceIn(0, 100) / 100f
+            val requiredConfidence = 1f - sensitivity
+            val speech = speechProbability?.let { it >= requiredConfidence } ?: run {
                 var sum = 0.0
                 for (s in processedShorts) {
                     val n = s.toDouble() / 32768.0
                     sum += n * n
                 }
                 val rms = if (processedShorts.isNotEmpty()) kotlin.math.sqrt(sum / processedShorts.size.toDouble()).toFloat() else 0f
-                rms >= (threshold * 0.12f)
+                rms >= (requiredConfidence * 0.12f)
             }
             if (!speech) {
                 for (i in processedShorts.indices) {

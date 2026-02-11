@@ -52,6 +52,8 @@ data class AppUiState(
     val dereverbLevel: Float = 0.5f,
     
     val amplification: Float = 10.0f,
+
+    val audioConfigRevision: Int = 0,
     
     val autoStart: Boolean = false,
     
@@ -188,6 +190,7 @@ class MainViewModel : ViewModel() {
             dereverbLevel = s.dereverbLevel,
             amplification = s.amplification
         )
+        _uiState.update { it.copy(audioConfigRevision = it.audioConfigRevision + 1) }
     }
 
     fun toggleStream() {

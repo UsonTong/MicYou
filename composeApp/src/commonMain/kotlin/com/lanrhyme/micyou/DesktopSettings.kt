@@ -289,6 +289,12 @@ fun SettingsContent(section: SettingsSection, viewModel: MainViewModel) {
                     // Desktop Audio Processing
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
                          Column(modifier = Modifier.padding(8.dp)) {
+                            Text(
+                                "${strings.audioConfigAppliedLabel}: ${state.audioConfigRevision}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
                             // Noise Suppression
                             ListItem(
                                 headlineContent = { Text(strings.enableNsLabel) },
