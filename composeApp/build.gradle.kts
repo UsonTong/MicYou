@@ -121,13 +121,20 @@ compose.desktop {
         mainClass = "com.lanrhyme.micyou.MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb)
             packageName = project.property("project.name").toString()
             packageVersion = project.property("project.version").toString()
+            description = "MicYou Application"
+            vendor = "LanRhyme"
+            copyright = "Copyright (c) 2026 LanRhyme"
+            
             windows {
                 iconFile.set(file("src/commonMain/composeResources/drawable/icon256.ico"))
-                // menuGroup = "MicYou"
-                // upgradeUuid = "..."
+                menu = true
+                menuGroup = "MicYou"
+                shortcut = true
+                dirChooser = true
+                upgradeUuid = "f76264ff-05a4-494a-a8fb-7ed3410cb17c"
             }
         }
     }

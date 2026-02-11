@@ -42,11 +42,13 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Build Windows MSI
-      run: ./gradlew :composeApp:packageMsi
+    - name: Build Windows Installer
+      run: ./gradlew :composeApp:packageMsi :composeApp:packageExe
 
     - name: Upload Windows Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: windows-msi
-        path: composeApp/build/compose/binaries/main/msi/*.msi
+        name: windows-installers
+        path: |
+          composeApp/build/compose/binaries/main/msi/*.msi
+          composeApp/build/compose/binaries/main/exe/*.exe
