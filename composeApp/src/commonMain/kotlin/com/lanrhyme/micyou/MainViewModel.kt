@@ -61,7 +61,8 @@ data class AppUiState(
     
     val isMuted: Boolean = false,
     val language: AppLanguage = AppLanguage.System,
-    val useDynamicColor: Boolean = false
+    val useDynamicColor: Boolean = false,
+    val bluetoothAddress: String = ""
 )
 
 class MainViewModel : ViewModel() {
@@ -121,6 +122,7 @@ class MainViewModel : ViewModel() {
         val savedLanguage = try { AppLanguage.valueOf(savedLanguageName) } catch(e: Exception) { AppLanguage.System }
 
         val savedUseDynamicColor = settings.getBoolean("use_dynamic_color", false)
+        val savedBluetoothAddress = settings.getString("bluetooth_address", "")
 
         _uiState.update { 
             it.copy(
@@ -145,7 +147,8 @@ class MainViewModel : ViewModel() {
                 autoStart = savedAutoStart,
                 enableStreamingNotification = savedEnableStreamingNotification,
                 language = savedLanguage,
-                useDynamicColor = savedUseDynamicColor
+                useDynamicColor = savedUseDynamicColor,
+                bluetoothAddress = savedBluetoothAddress
             ) 
         }
         
@@ -219,9 +222,9 @@ class MainViewModel : ViewModel() {
     }
 
     fun startStream() {
-        val ip = _uiState.value.ipAddress
-        val port = _uiState.value.port.toIntOrNull() ?: 6000
         val mode = _uiState.value.mode
+        val ip = if (mode == ConnectionMode.Bluetooth) _uiState.value.bluetoothAddress else _uiState.value.ipAddress
+        val port = _uiState.value.port.toIntOrNull() ?: 6000
         val isClient = getPlatform().type == PlatformType.Android
         val sampleRate = _uiState.value.sampleRate
         val channelCount = _uiState.value.channelCount
@@ -258,8 +261,13 @@ class MainViewModel : ViewModel() {
     }
     
     fun setIp(ip: String) {
-        _uiState.update { it.copy(ipAddress = ip) }
-        settings.putString("ip_address", ip)
+        if (_uiState.value.mode == ConnectionMode.Bluetooth) {
+            _uiState.update { it.copy(bluetoothAddress = ip) }
+            settings.putString("bluetooth_address", ip)
+        } else {
+            _uiState.update { it.copy(ipAddress = ip) }
+            settings.putString("ip_address", ip)
+        }
     }
 
     fun setPort(port: String) {

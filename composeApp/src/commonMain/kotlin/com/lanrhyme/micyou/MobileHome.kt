@@ -128,7 +128,11 @@ fun MobileHome(viewModel: MainViewModel) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (isClient) {
                              OutlinedTextField(
-                                value = if (state.mode == ConnectionMode.Usb) "127.0.0.1" else state.ipAddress,
+                                value = when (state.mode) {
+                                    ConnectionMode.Usb -> "127.0.0.1"
+                                    ConnectionMode.Bluetooth -> state.bluetoothAddress
+                                    else -> state.ipAddress
+                                },
                                 onValueChange = { if (state.mode != ConnectionMode.Usb) viewModel.setIp(it) },
                                 label = {
                                     Text(
