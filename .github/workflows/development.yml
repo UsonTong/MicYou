@@ -12,6 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - name: Read Version
+      id: version
+      run: |
+        VERSION=$(grep "^project.version=" gradle.properties | cut -d'=' -f2 | tr -d '\r')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
     - name: set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -25,16 +30,29 @@ jobs:
     - name: Build Android Debug
       run: ./gradlew :composeApp:assembleDebug
 
+    - name: Prepare Android Artifact
+      run: |
+        mkdir -p ci-artifacts
+        APK=$(ls composeApp/build/outputs/apk/debug/*.apk | head -n 1)
+        cp "$APK" "ci-artifacts/MicYou-Android${{ steps.version.outputs.version }}.apk"
+
     - name: Upload Android Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: android-debug-apk
-        path: composeApp/build/outputs/apk/debug/*.apk
+        name: MicYou-Android${{ steps.version.outputs.version }}.apk
+        path: ci-artifacts/MicYou-Android${{ steps.version.outputs.version }}.apk
 
   build-windows:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
+    - name: Read Version
+      id: version
+      shell: pwsh
+      run: |
+        $line = (Select-String -Path gradle.properties -Pattern '^project\.version=').Line
+        $version = $line.Split('=')[1].Trim()
+        "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
     - name: set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -42,13 +60,32 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Build Windows Installer
-      run: ./gradlew :composeApp:packageMsi :composeApp:packageExe
+    - name: Install NSIS
+      shell: pwsh
+      run: choco install nsis -y
+
+    - name: Build Windows Artifacts
+      shell: pwsh
+      run: |
+        ./gradlew :composeApp:packageWindowsZip :composeApp:packageWindowsNsis
+
+    - name: Prepare Windows Artifacts
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path ci-artifacts | Out-Null
+        $version = '${{ steps.version.outputs.version }}'
+        $zip = Get-ChildItem -Path composeApp/build/distributions -Filter *.zip | Select-Object -First 1
+        if (-not $zip) { throw "No zip found in composeApp/build/distributions" }
+        Copy-Item $zip.FullName ("ci-artifacts/MicYou-Win$version.zip") -Force
+
+        $installer = Get-ChildItem -Path composeApp/build/distributions -Filter *setup-nsis.exe | Select-Object -First 1
+        if (-not $installer) { throw "No NSIS installer found in composeApp/build/distributions" }
+        Copy-Item $installer.FullName ("ci-artifacts/MicYou-Win$version-installer.exe") -Force
 
     - name: Upload Windows Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: windows-installers
+        name: MicYou-Win${{ steps.version.outputs.version }}
         path: |
-          composeApp/build/compose/binaries/main/msi/*.msi
-          composeApp/build/compose/binaries/main/exe/*.exe
+          ci-artifacts/MicYou-Win${{ steps.version.outputs.version }}.zip
+          ci-artifacts/MicYou-Win${{ steps.version.outputs.version }}-installer.exe

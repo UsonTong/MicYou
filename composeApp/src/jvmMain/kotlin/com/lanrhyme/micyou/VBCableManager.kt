@@ -323,11 +323,11 @@ namespace AudioSwitcher {
                         key.fmtid = PKEY_Device_FriendlyName_FmtId;
                         key.pid = PKEY_Device_FriendlyName_Pid;
                         
-                        PropVariant var;
-                        getValue(store, ref key, out var);
+                        PropVariant propVar;
+                        getValue(store, ref key, out propVar);
                         
-                        if (var.vt == 31) { // VT_LPWSTR
-                            string name = Marshal.PtrToStringUni(var.pwszVal);
+                        if (propVar.vt == 31) { // VT_LPWSTR
+                            string name = Marshal.PtrToStringUni(propVar.pwszVal);
                             // 如果我们要读取且不拥有缓冲区，严格来说不需要 PropVariantClear
                             // 但对于 VT_LPWSTR 我们应该小心
                             // 在这个简单的脚本中，我们主要依赖进程清理
@@ -378,9 +378,19 @@ Add-Type -TypeDefinition ${'$'}csharpSource
         
         try {
             val tempScript = File.createTempFile("setdefaultmic", ".ps1")
-            tempScript.writeText(script)
+            val bom = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
+            tempScript.writeBytes(bom + script.toByteArray(Charsets.UTF_8))
             
-            val process = ProcessBuilder("powershell.exe", "-Sta", "-ExecutionPolicy", "Bypass", "-File", tempScript.absolutePath)
+            val process = ProcessBuilder(
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Sta",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                tempScript.absolutePath
+            )
             process.redirectErrorStream(true)
             val p = process.start()
             val output = p.inputStream.bufferedReader().readText()
@@ -396,4 +406,3 @@ Add-Type -TypeDefinition ${'$'}csharpSource
          println("Uninstall functionality not fully implemented. Please uninstall from Control Panel.")
     }
 }
-

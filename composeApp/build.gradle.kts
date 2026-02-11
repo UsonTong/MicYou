@@ -1,5 +1,25 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.gradle.api.tasks.bundling.Zip
+import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.TaskAction
+import org.gradle.process.ExecOperations
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
+import java.io.FileOutputStream
+import javax.imageio.ImageIO
+import javax.inject.Inject
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -121,7 +141,7 @@ compose.desktop {
         mainClass = "com.lanrhyme.micyou.MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Exe, TargetFormat.Deb)
             packageName = project.property("project.name").toString()
             packageVersion = project.property("project.version").toString()
             description = "MicYou Application"
@@ -129,16 +149,93 @@ compose.desktop {
             copyright = "Copyright (c) 2026 LanRhyme"
             
             windows {
-                iconFile.set(file("src/commonMain/composeResources/drawable/icon256.ico"))
+                val generatedIcon = layout.buildDirectory.file("generated/icons/icon256.ico").get().asFile
+                iconFile.set(generatedIcon)
+                perUserInstall = true
                 menu = true
                 menuGroup = "MicYou"
                 shortcut = true
-                dirChooser = true
+                dirChooser = false
                 upgradeUuid = "f76264ff-05a4-494a-a8fb-7ed3410cb17c"
+                console = false
             }
         }
     }
 }
+
+val windowsIconIcoFile = layout.buildDirectory.file("generated/icons/icon256.ico").get().asFile
+abstract class GenerateWindowsIconIcoTask : DefaultTask() {
+    @get:InputFile val sourcePng: RegularFileProperty = project.objects.fileProperty()
+    @get:OutputFile val outputIco: RegularFileProperty = project.objects.fileProperty()
+
+    @TaskAction
+    fun run() {
+        val sourceFile = sourcePng.get().asFile
+        val outFile = outputIco.get().asFile
+
+        if (!sourceFile.exists()) {
+            throw GradleException("Icon source not found: ${sourceFile.absolutePath}")
+        }
+
+        val src = ImageIO.read(sourceFile) ?: throw GradleException("Unable to read png: ${sourceFile.absolutePath}")
+        val target = BufferedImage(256, 256, BufferedImage.TYPE_INT_ARGB)
+        val g = target.createGraphics()
+        try {
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g.drawImage(src, 0, 0, 256, 256, null)
+        } finally {
+            g.dispose()
+        }
+
+        val pngBytes = ByteArrayOutputStream().use { baos ->
+            if (!ImageIO.write(target, "png", baos)) {
+                throw GradleException("Unable to encode png for ico")
+            }
+            baos.toByteArray()
+        }
+
+        outFile.parentFile.mkdirs()
+        FileOutputStream(outFile).use { fos ->
+            DataOutputStream(fos).use { out ->
+                fun writeShortLe(v: Int) {
+                    out.writeByte(v and 0xFF)
+                    out.writeByte((v ushr 8) and 0xFF)
+                }
+                fun writeIntLe(v: Int) {
+                    out.writeByte(v and 0xFF)
+                    out.writeByte((v ushr 8) and 0xFF)
+                    out.writeByte((v ushr 16) and 0xFF)
+                    out.writeByte((v ushr 24) and 0xFF)
+                }
+
+                writeShortLe(0)
+                writeShortLe(1)
+                writeShortLe(1)
+
+                out.writeByte(0)
+                out.writeByte(0)
+                out.writeByte(0)
+                out.writeByte(0)
+                writeShortLe(1)
+                writeShortLe(32)
+                writeIntLe(pngBytes.size)
+                writeIntLe(6 + 16)
+
+                out.write(pngBytes)
+            }
+        }
+    }
+}
+
+tasks.register<GenerateWindowsIconIcoTask>("generateWindowsIconIco") {
+    sourcePng.set(layout.projectDirectory.file("src/commonMain/composeResources/drawable/app_icon.png"))
+    outputIco.set(layout.buildDirectory.file("generated/icons/icon256.ico"))
+}
+
+tasks.matching { it.name in setOf("createDistributable", "createReleaseDistributable", "packageExe", "packageReleaseExe", "packageWindowsNsis") }
+    .configureEach { dependsOn("generateWindowsIconIco") }
 tasks.matching { it.name == "jvmRun" }.configureEach {
     if (this is org.gradle.process.JavaForkOptions) {
         val tmpDir = layout.buildDirectory.dir("tmp/jvmRun").get().asFile
@@ -147,4 +244,109 @@ tasks.matching { it.name == "jvmRun" }.configureEach {
         }
         jvmArgs("-Djava.io.tmpdir=${tmpDir.absolutePath}")
     }
+}
+
+tasks.register<Zip>("packageWindowsZip") {
+    dependsOn("createDistributable")
+
+    val version = project.property("project.version").toString()
+    val distDir = layout.buildDirectory.dir("compose/binaries/main/app")
+
+    from(distDir)
+    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+    archiveBaseName.set("${project.property("project.name")}-windows")
+    archiveVersion.set(version)
+}
+
+abstract class PackageWindowsNsisTask @Inject constructor(
+    private val execOperations: ExecOperations,
+) : DefaultTask() {
+    @get:Input val appName: Property<String> = project.objects.property(String::class.java)
+    @get:Input val appVersion: Property<String> = project.objects.property(String::class.java)
+    @get:Input val vendor: Property<String> = project.objects.property(String::class.java)
+
+    @get:InputDirectory val inputDir: DirectoryProperty = project.objects.directoryProperty()
+    @get:InputFile val scriptFile: RegularFileProperty = project.objects.fileProperty()
+    @get:OutputFile val outputFile: RegularFileProperty = project.objects.fileProperty()
+
+    @get:Input
+    @get:Optional
+    val makensisPath: Property<String> = project.objects.property(String::class.java)
+
+    @get:Input
+    @get:Optional
+    val iconPath: Property<String> = project.objects.property(String::class.java)
+
+    @TaskAction
+    fun run() {
+        val script = scriptFile.get().asFile
+        val input = inputDir.get().asFile
+        val out = outputFile.get().asFile
+
+        if (!script.exists()) {
+            throw GradleException("NSIS script not found: ${script.absolutePath}")
+        }
+        if (!input.exists()) {
+            throw GradleException("Distributable not found: ${input.absolutePath}")
+        }
+
+        out.parentFile.mkdirs()
+
+        val makensisExe = makensisPath.orNull?.takeIf { it.isNotBlank() } ?: run {
+            val candidates = listOf(
+                File("C:/Program Files (x86)/NSIS/makensis.exe"),
+                File("C:/Program Files/NSIS/makensis.exe"),
+            )
+            candidates.firstOrNull { it.exists() }?.absolutePath ?: "makensis"
+        }
+
+        val iconArg = iconPath.orNull?.takeIf { it.isNotBlank() }?.let { "/DICON_FILE=$it" } ?: "/DICON_FILE="
+
+        try {
+            execOperations.exec {
+                executable = makensisExe
+                args(
+                    "/DAPP_NAME=${appName.get()}",
+                    "/DAPP_VERSION=${appVersion.get()}",
+                    "/DVENDOR=${vendor.get()}",
+                    "/DINPUT_DIR=${input.absolutePath}",
+                    "/DOUTPUT_DIR=${out.parentFile.absolutePath}",
+                    iconArg,
+                    script.absolutePath,
+                )
+            }
+        } catch (e: Exception) {
+            throw GradleException(
+                "Failed to run makensis. Install NSIS and ensure makensis is available, or set -Pnsis.makensis=<path-to-makensis.exe>.",
+                e,
+            )
+        }
+
+        if (!out.exists()) {
+            throw GradleException("NSIS installer was not created: ${out.absolutePath}")
+        }
+    }
+}
+
+tasks.register<PackageWindowsNsisTask>("packageWindowsNsis") {
+    dependsOn("createDistributable")
+
+    val appNameValue = project.property("project.name").toString()
+    val versionValue = project.property("project.version").toString()
+
+    appName.set(appNameValue)
+    appVersion.set(versionValue)
+    vendor.set("LanRhyme")
+
+    inputDir.set(layout.buildDirectory.dir("compose/binaries/main/app/$appNameValue"))
+    scriptFile.set(layout.projectDirectory.file("nsis/installer.nsi"))
+    outputFile.set(layout.buildDirectory.file("distributions/$appNameValue-$versionValue-setup-nsis.exe"))
+
+    makensisPath.set(
+        providers.gradleProperty("nsis.makensis")
+            .orElse(providers.environmentVariable("NSIS_MAKENSIS"))
+            .orElse("")
+    )
+
+    iconPath.set(windowsIconIcoFile.absolutePath)
 }
