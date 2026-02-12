@@ -13,6 +13,8 @@ import micyou.composeapp.generated.resources.app_icon
 import org.jetbrains.compose.resources.painterResource
 
 fun main() {
+    Logger.init(JvmLogger())
+    Logger.i("Main", "App started")
     application {
         var isSettingsOpen by remember { mutableStateOf(false) }
     

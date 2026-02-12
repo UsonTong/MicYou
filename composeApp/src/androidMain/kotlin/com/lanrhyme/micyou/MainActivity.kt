@@ -17,6 +17,8 @@ class MainActivity : ComponentActivity() {
         
         AndroidContext.init(this)
         ContextHelper.init(this)
+        Logger.init(AndroidLogger(this))
+        Logger.i("MainActivity", "App started")
 
         val permissionsToRequest = mutableListOf<String>()
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {

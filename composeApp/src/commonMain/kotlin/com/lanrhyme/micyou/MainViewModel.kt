@@ -64,7 +64,8 @@ data class AppUiState(
     val language: AppLanguage = AppLanguage.System,
     val useDynamicColor: Boolean = false,
     val bluetoothAddress: String = "",
-    val isAutoConfig: Boolean = true
+    val isAutoConfig: Boolean = true,
+    val snackbarMessage: String? = null
 )
 
 class MainViewModel : ViewModel() {
@@ -253,6 +254,7 @@ class MainViewModel : ViewModel() {
     }
 
     fun startStream() {
+        Logger.i("MainViewModel", "Starting stream")
         val mode = _uiState.value.mode
         val ip = if (mode == ConnectionMode.Bluetooth) _uiState.value.bluetoothAddress else _uiState.value.ipAddress
         val port = _uiState.value.port.toIntOrNull() ?: 6000
@@ -265,15 +267,23 @@ class MainViewModel : ViewModel() {
         updateAudioEngineConfig()
 
         viewModelScope.launch {
-            audioEngine.start(ip, port, mode, isClient, sampleRate, channelCount, audioFormat)
+            try {
+                audioEngine.start(ip, port, mode, isClient, sampleRate, channelCount, audioFormat)
+                Logger.i("MainViewModel", "Stream started successfully")
+            } catch (e: Exception) {
+                Logger.e("MainViewModel", "Failed to start stream", e)
+                _uiState.update { it.copy(errorMessage = e.message) }
+            }
         }
     }
 
     fun stopStream() {
+        Logger.i("MainViewModel", "Stopping stream")
         audioEngine.stop()
     }
 
     fun setMode(mode: ConnectionMode) {
+        Logger.i("MainViewModel", "Setting connection mode to $mode")
         val platformType = getPlatform().type
         val current = _uiState.value
 
@@ -305,15 +315,18 @@ class MainViewModel : ViewModel() {
     
     fun setIp(ip: String) {
         if (_uiState.value.mode == ConnectionMode.Bluetooth) {
+            Logger.d("MainViewModel", "Setting Bluetooth address to $ip")
             _uiState.update { it.copy(bluetoothAddress = ip) }
             settings.putString("bluetooth_address", ip)
         } else {
+            Logger.d("MainViewModel", "Setting IP to $ip")
             _uiState.update { it.copy(ipAddress = ip) }
             settings.putString("ip_address", ip)
         }
     }
 
     fun setPort(port: String) {
+        Logger.d("MainViewModel", "Setting port to $port")
         _uiState.update { it.copy(port = port) }
         settings.putString("port", port)
     }
@@ -428,8 +441,26 @@ class MainViewModel : ViewModel() {
         _uiState.update { it.copy(useDynamicColor = enable) }
     }
 
+    fun clearInstallMessage() {
+        _uiState.update { it.copy(installMessage = null) }
+    }
+
+    fun showSnackbar(message: String) {
+        _uiState.update { it.copy(snackbarMessage = message) }
+    }
+
+    fun clearSnackbar() {
+        _uiState.update { it.copy(snackbarMessage = null) }
+    }
+
     fun setLanguage(language: AppLanguage) {
+        Logger.i("MainViewModel", "Setting language to ${language.name}")
         _uiState.update { it.copy(language = language) }
         settings.putString("language", language.name)
+    }
+
+    fun exportLog(onResult: (String?) -> Unit) {
+        val path = Logger.getLogFilePath()
+        onResult(path)
     }
 }

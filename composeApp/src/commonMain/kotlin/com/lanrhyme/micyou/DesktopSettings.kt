@@ -36,15 +36,28 @@ fun DesktopSettings(
 ) {
     val platform = getPlatform()
     
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.fillMaxSize()
-    ) {
-        if (platform.type == PlatformType.Desktop) {
-            DesktopLayout(viewModel, onClose)
-        } else {
-            MobileLayout(viewModel, onClose)
+    val snackbarHostState = remember { SnackbarHostState() }
+    val state by viewModel.uiState.collectAsState()
+    val strings = LocalAppStrings.current
+
+    LaunchedEffect(state.snackbarMessage) {
+        state.snackbarMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearSnackbar()
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface
+    ) { padding ->
+        Box(modifier = Modifier.padding(padding)) {
+            if (platform.type == PlatformType.Desktop) {
+                DesktopLayout(viewModel, onClose)
+            } else {
+                MobileLayout(viewModel, onClose)
+            }
         }
     }
 }
@@ -559,6 +572,19 @@ fun SettingsContent(section: SettingsSection, viewModel: MainViewModel) {
                         supportingContent = { Text(strings.viewLibraries) },
                         leadingContent = { Icon(Icons.Default.Description, null) },
                         modifier = Modifier.clickable { showLicenseDialog = true }
+                    )
+                    HorizontalDivider()
+                    ListItem(
+                        headlineContent = { Text(strings.exportLog) },
+                        supportingContent = { Text(strings.exportLogDesc) },
+                        leadingContent = { Icon(Icons.Default.BugReport, null) },
+                        modifier = Modifier.clickable {
+                            viewModel.exportLog { path ->
+                                if (path != null) {
+                                    viewModel.showSnackbar("${strings.logExported}: $path")
+                                }
+                            }
+                        }
                     )
                 }
                 

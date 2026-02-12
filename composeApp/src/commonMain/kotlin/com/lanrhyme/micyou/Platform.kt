@@ -20,6 +20,47 @@ expect fun uninstallVBCable()
 
 expect fun getAppVersion(): String
 
+/**
+ * 日志级别
+ */
+enum class LogLevel {
+    DEBUG, INFO, WARN, ERROR
+}
+
+/**
+ * 跨平台日志记录器
+ */
+object Logger {
+    private var loggerImpl: LoggerImpl? = null
+
+    fun init(impl: LoggerImpl) {
+        loggerImpl = impl
+    }
+
+    fun d(tag: String, message: String) = log(LogLevel.DEBUG, tag, message)
+    fun i(tag: String, message: String) = log(LogLevel.INFO, tag, message)
+    fun w(tag: String, message: String) = log(LogLevel.WARN, tag, message)
+    fun e(tag: String, message: String, throwable: Throwable? = null) = log(LogLevel.ERROR, tag, message, throwable)
+
+    private fun log(level: LogLevel, tag: String, message: String, throwable: Throwable? = null) {
+        loggerImpl?.log(level, tag, message, throwable)
+        if (level == LogLevel.ERROR) {
+            println("[$level][$tag] $message")
+            throwable?.printStackTrace()
+        }
+    }
+
+    /**
+     * 获取日志文件路径（用于分享/导出）
+     */
+    fun getLogFilePath(): String? = loggerImpl?.getLogFilePath()
+}
+
+interface LoggerImpl {
+    fun log(level: LogLevel, tag: String, message: String, throwable: Throwable? = null)
+    fun getLogFilePath(): String?
+}
+
 @Composable
 expect fun getDynamicColorScheme(isDark: Boolean): ColorScheme?
 

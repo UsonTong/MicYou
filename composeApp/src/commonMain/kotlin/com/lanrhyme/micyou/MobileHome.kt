@@ -43,8 +43,16 @@ fun MobileHome(viewModel: MainViewModel) {
     val platform = remember { getPlatform() }
     val isClient = platform.type == PlatformType.Android
     val strings = LocalAppStrings.current
+    val snackbarHostState = remember { SnackbarHostState() }
     
     var showSettings by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.snackbarMessage) {
+        state.snackbarMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearSnackbar()
+        }
+    }
 
     if (showSettings) {
         ModalBottomSheet(onDismissRequest = { showSettings = false }) {
@@ -55,6 +63,7 @@ fun MobileHome(viewModel: MainViewModel) {
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { 

@@ -96,11 +96,13 @@ actual class AudioEngine actual constructor() {
         audioFormat: com.lanrhyme.micyou.AudioFormat
     ) {
         if (!isClient) return
+        Logger.i("AudioEngine", "Starting Android AudioEngine: mode=$mode, ip=$ip, port=$port, sampleRate=${sampleRate.value}, channels=${channelCount.label}, format=${audioFormat.label}")
         _lastError.value = null
 
         val jobToJoin = startStopMutex.withLock {
             val currentJob = job
             if (currentJob != null && !currentJob.isCompleted) {
+                Logger.w("AudioEngine", "AudioEngine already running, ignoring start request")
                 null
             } else {
                 _state.value = StreamState.Connecting
@@ -136,6 +138,7 @@ actual class AudioEngine actual constructor() {
                             // 如果启用了处理，优先使用 MIC，因为 UNPROCESSED 可能会绕过系统效果
                             val preferredSource = if (useProcessing) MediaRecorder.AudioSource.MIC else MediaRecorder.AudioSource.UNPROCESSED
 
+                            Logger.d("AudioEngine", "Initializing AudioRecord with source $preferredSource")
                             recorder = try {
                                 AudioRecord(
                                     preferredSource,
@@ -145,7 +148,7 @@ actual class AudioEngine actual constructor() {
                                     minBufSize * 2
                                 )
                             } catch (e: Exception) {
-                                println("Preferred source $preferredSource failed, falling back to MIC: ${e.message}")
+                                Logger.w("AudioEngine", "Preferred source $preferredSource failed, falling back to MIC: ${e.message}")
                                 if (preferredSource != MediaRecorder.AudioSource.MIC) {
                                     AudioRecord(
                                         MediaRecorder.AudioSource.MIC,
@@ -159,7 +162,7 @@ actual class AudioEngine actual constructor() {
                                 }
                             }
                         } catch (e: SecurityException) {
-                            e.printStackTrace()
+                            Logger.e("AudioEngine", "Record permission denied", e)
                             _state.value = StreamState.Error
                             _lastError.value = "录音权限不足"
                             return@launch
@@ -167,7 +170,7 @@ actual class AudioEngine actual constructor() {
                         
                         if (recorder.state != AudioRecord.STATE_INITIALIZED) {
                             val msg = "AudioRecord 初始化失败"
-                            println(msg)
+                            Logger.e("AudioEngine", msg)
                             _state.value = StreamState.Error
                             _lastError.value = msg
                             return@launch
@@ -178,24 +181,27 @@ actual class AudioEngine actual constructor() {
                             if (NoiseSuppressor.isAvailable()) {
                                 noiseSuppressor = NoiseSuppressor.create(recorder.audioSessionId)
                                 noiseSuppressor?.enabled = enableNS
+                                Logger.d("AudioEngine", "NoiseSuppressor initialized, enabled=$enableNS")
                             } else {
-                                println("NoiseSuppressor not available")
+                                Logger.d("AudioEngine", "NoiseSuppressor not available")
                             }
                             
                             if (AutomaticGainControl.isAvailable()) {
                                 automaticGainControl = AutomaticGainControl.create(recorder.audioSessionId)
                                 automaticGainControl?.enabled = enableAGC
+                                Logger.d("AudioEngine", "AutomaticGainControl initialized, enabled=$enableAGC")
                             } else {
-                                println("AutomaticGainControl not available")
+                                Logger.d("AudioEngine", "AutomaticGainControl not available")
                             }
                         } catch (e: Exception) {
-                             println("Failed to initialize audio effects: ${e.message}")
+                             Logger.w("AudioEngine", "Failed to initialize audio effects: ${e.message}")
                         }
                         
                         // 网络设置
                         val selectorManager = SelectorManager(Dispatchers.IO)
                         
                         if (mode == ConnectionMode.Bluetooth) {
+                            Logger.i("AudioEngine", "Connecting via Bluetooth to $ip")
                             val adapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
                                 ?: throw UnsupportedOperationException("设备不支持蓝牙")
                             
@@ -210,21 +216,25 @@ actual class AudioEngine actual constructor() {
                             // Note: Missing explicit permission check here, relying on SecurityException if missing
                             val btSocket = device.createRfcommSocketToServiceRecord(uuid)
                             btSocket.connect()
+                            Logger.i("AudioEngine", "Bluetooth connected to $ip")
                             
                             input = btSocket.inputStream.toByteReadChannel()
                             output = btSocket.outputStream.toByteWriteChannel()
                             closeConnection = { btSocket.close() }
                             
                         } else {
-                            val socketBuilder = aSocket(selectorManager)
                             val targetIp = if (mode == ConnectionMode.Usb) "127.0.0.1" else ip
+                            Logger.i("AudioEngine", "Connecting via TCP to $targetIp:$port")
+                            val socketBuilder = aSocket(selectorManager)
                             val socket = socketBuilder.tcp().connect(targetIp, port)
+                            Logger.i("AudioEngine", "TCP connected to $targetIp:$port")
                             input = socket.openReadChannel()
                             output = socket.openWriteChannel(autoFlush = true)
                             closeConnection = { socket.close() }
                         }
 
                         // 握手
+                        Logger.d("AudioEngine", "Starting handshake")
                         output.writeFully(CHECK_1.encodeToByteArray())
                         output.flush()
 
@@ -233,12 +243,13 @@ actual class AudioEngine actual constructor() {
 
                         if (!responseBuffer.decodeToString().equals(CHECK_2)) {
                             val msg = "握手失败"
-                            println(msg)
+                            Logger.e("AudioEngine", msg)
                             _state.value = StreamState.Error
                             _lastError.value = msg
                             closeConnection()
                             return@launch
                         }
+                        Logger.i("AudioEngine", "Handshake successful")
 
                         recorder.startRecording()
                         _state.value = StreamState.Streaming
@@ -260,6 +271,7 @@ actual class AudioEngine actual constructor() {
 
                         // --- Writer Loop (Send Channel -> Socket) ---
                         val writerJob = launch {
+                            Logger.d("AudioEngine", "Writer loop started")
                             for (msg in sendChannel!!) {
                                 try {
                                     val packetBytes = proto.encodeToByteArray(MessageWrapper.serializer(), msg)
@@ -269,19 +281,21 @@ actual class AudioEngine actual constructor() {
                                     output.writeFully(packetBytes)
                                     output.flush()
                                 } catch (e: Exception) {
-                                    println("Error writing to socket: ${e.message}")
+                                    Logger.e("AudioEngine", "Error writing to socket", e)
                                     break
                                 }
                             }
+                            Logger.d("AudioEngine", "Writer loop stopped")
                         }
 
                         // --- Reader Loop (Socket -> Receive Channel/Action) ---
                         val readerJob = launch {
+                            Logger.d("AudioEngine", "Reader loop started")
                             try {
                                 while (isActive) {
                                     val magic = input.readInt()
                                     if (magic != PACKET_MAGIC) {
-                                        println("Invalid Magic: ${magic.toString(16)}")
+                                        Logger.w("AudioEngine", "Invalid Magic: ${magic.toString(16)}")
                                         throw java.io.IOException("Invalid Packet Magic")
                                     }
                                     
@@ -294,19 +308,19 @@ actual class AudioEngine actual constructor() {
                                             val wrapper = proto.decodeFromByteArray(MessageWrapper.serializer(), packetBytes)
                                             if (wrapper.mute != null) {
                                                 _isMuted.value = wrapper.mute.isMuted
-                                                println("Received Mute Command: ${wrapper.mute.isMuted}")
+                                                Logger.i("AudioEngine", "Received Mute Command: ${wrapper.mute.isMuted}")
                                             }
                                         } catch (e: Exception) {
-                                            println("Error decoding incoming message: ${e.message}")
+                                            Logger.e("AudioEngine", "Error decoding incoming message", e)
                                         }
                                     }
                                 }
                             } catch (e: Exception) {
                                 if (isActive && _state.value == StreamState.Streaming) {
-                                    println("Error reading from socket: ${e.message}")
-                                    // Connection issue will be handled by main loop cancellation or detection
+                                    Logger.e("AudioEngine", "Error reading from socket", e)
                                 }
                             }
+                            Logger.d("AudioEngine", "Reader loop stopped")
                         }
                         
                         // 发送初始静音状态
@@ -372,14 +386,15 @@ actual class AudioEngine actual constructor() {
                                               e is java.io.EOFException
 
                             if (!isDisconnect) {
-                                e.printStackTrace()
+                                Logger.e("AudioEngine", "Connection lost", e)
                                 _state.value = StreamState.Error
                                 _lastError.value = "连接断开: ${e.message}"
                             } else {
-                                println("Disconnected by remote: ${e.message}")
+                                Logger.i("AudioEngine", "Disconnected by remote: ${e.message}")
                             }
                         }
                     } finally {
+                        Logger.d("AudioEngine", "Cleaning up resources")
                         try {
                             noiseSuppressor?.release()
                             automaticGainControl?.release()
@@ -400,9 +415,10 @@ actual class AudioEngine actual constructor() {
                                 context.startService(intent)
                             }
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            Logger.w("AudioEngine", "Error during cleanup: ${e.message}")
                         }
                         _state.value = StreamState.Idle
+                        Logger.i("AudioEngine", "AudioEngine stopped")
                     }
                 }.also { job = it }
             }

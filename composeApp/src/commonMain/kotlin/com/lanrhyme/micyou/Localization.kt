@@ -87,7 +87,12 @@ data class AppStrings(
     val contributorsLabel: String,
     val contributorsDesc: String,
     val autoConfigLabel: String,
-    val autoConfigDesc: String
+    val autoConfigDesc: String,
+    val logsSection: String,
+    val exportLog: String,
+    val exportLogDesc: String,
+    val logExported: String,
+    val logExportFailed: String
 )
 
 val EnStrings = AppStrings(
@@ -165,7 +170,12 @@ val EnStrings = AppStrings(
     contributorsLabel = "Contributors",
     contributorsDesc = "Thanks to everyone who contributed to this project.",
     autoConfigLabel = "Auto Configure Audio",
-    autoConfigDesc = "Automatically select optimal audio settings based on connection mode"
+    autoConfigDesc = "Automatically select optimal audio settings based on connection mode",
+    logsSection = "Logs",
+    exportLog = "Export Log",
+    exportLogDesc = "Export application logs for debugging",
+    logExported = "Log exported to: %s",
+    logExportFailed = "Failed to export log"
 )
 
 val ZhStrings = AppStrings(
@@ -243,7 +253,12 @@ val ZhStrings = AppStrings(
     contributorsLabel = "贡献者",
     contributorsDesc = "感谢每一位为本项目做出贡献的人",
     autoConfigLabel = "自动配置音频",
-    autoConfigDesc = "根据连接模式自动选择最佳音频设置"
+    autoConfigDesc = "根据连接模式自动选择最佳音频设置",
+    logsSection = "日志",
+    exportLog = "导出日志",
+    exportLogDesc = "导出应用日志以供调试",
+    logExported = "日志已导出至: %s",
+    logExportFailed = "导出日志失败"
 )
 
 val LocalAppStrings = staticCompositionLocalOf { ZhStrings }

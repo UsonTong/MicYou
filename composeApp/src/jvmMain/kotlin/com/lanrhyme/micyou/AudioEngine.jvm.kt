@@ -149,7 +149,7 @@ actual class AudioEngine actual constructor() {
         this.amplification = amplification
         
         if (System.getProperty("micyou.debugAudioConfig") == "true") {
-            println("配置已更新: Amp=$amplification, VAD=$enableVAD ($vadThreshold), AGC=$enableAGC ($agcTargetLevel), NS=$enableNS ($nsType)")
+            Logger.d("AudioEngine", "Config updated: Amp=$amplification, VAD=$enableVAD ($vadThreshold), AGC=$enableAGC ($agcTargetLevel), NS=$enableNS ($nsType)")
         }
     }
 
@@ -163,32 +163,35 @@ actual class AudioEngine actual constructor() {
         audioFormat: AudioFormat
     ) {
         if (isClient) return 
+        Logger.i("AudioEngine", "Starting JVM AudioEngine: mode=$mode, port=$port, sampleRate=${sampleRate.value}, channels=${channelCount.label}, format=${audioFormat.label}")
         _lastError.value = null // 清除之前的错误
         val jobToJoin = startStopMutex.withLock {
             val currentJob = job
             if (currentJob != null && !currentJob.isCompleted) {
+                Logger.w("AudioEngine", "AudioEngine already running, ignoring start request")
                 null
             } else {
                 _state.value = StreamState.Connecting
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         if (mode == ConnectionMode.Bluetooth) {
+                            Logger.i("AudioEngine", "Starting Bluetooth server")
                             while (isActive) {
                                 try {
                                     val localDevice = LocalDevice.getLocalDevice()
                                     localDevice.discoverable = DiscoveryAgent.GIAC
-                                    println("本机蓝牙名称: ${localDevice.friendlyName}, 地址: ${localDevice.bluetoothAddress}")
+                                    Logger.i("AudioEngine", "Local Bluetooth: name=${localDevice.friendlyName}, address=${localDevice.bluetoothAddress}")
                                     
                                     val uuid = javax.bluetooth.UUID("0000110100001000800000805F9B34FB", false)
                                     val url = "btspp://localhost:$uuid;name=MicYouServer"
                                     
                                     btNotifier = Connector.open(url) as StreamConnectionNotifier
-                                    println("蓝牙服务已启动: $url")
+                                    Logger.i("AudioEngine", "Bluetooth service started: $url")
                                     
                                     while (isActive) {
                                         val connection = btNotifier?.acceptAndOpen() ?: break
                                         activeBtConnection = connection
-                                        println("接受来自蓝牙的连接")
+                                        Logger.i("AudioEngine", "Accepted Bluetooth connection")
                                         _state.value = StreamState.Streaming
                                         _lastError.value = null
                                         
@@ -198,7 +201,7 @@ actual class AudioEngine actual constructor() {
                                             handleConnection(input, output)
                                         } catch (e: Exception) {
                                             if (!isNormalDisconnect(e)) {
-                                                e.printStackTrace()
+                                                Logger.e("AudioEngine", "Bluetooth connection error", e)
                                                 _lastError.value = "蓝牙连接错误: ${e.message}"
                                             }
                                         } finally {
@@ -206,12 +209,13 @@ actual class AudioEngine actual constructor() {
                                             try {
                                                 connection.close()
                                             } catch (e: Exception) {}
+                                            Logger.i("AudioEngine", "Bluetooth connection closed, waiting for new connection")
                                             _state.value = StreamState.Connecting
                                         }
                                     }
                                 } catch (e: Exception) { // Bluetooth specific errors
                                     if (isActive) {
-                                        e.printStackTrace()
+                                        Logger.e("AudioEngine", "Bluetooth service error", e)
                                         // Only show error if we really failed to init or loop crashed repeatedly
                                         if (_state.value != StreamState.Connecting) {
                                              _state.value = StreamState.Error
@@ -230,15 +234,19 @@ actual class AudioEngine actual constructor() {
                             }
                         } else {
                             // TCP Logic
+                            Logger.i("AudioEngine", "Starting TCP server on port $port")
                             selectorManager = SelectorManager(Dispatchers.IO)
                             
                             try {
                                 if (mode == ConnectionMode.Usb) {
                                     try {
+                                        Logger.d("AudioEngine", "Running adb reverse tcp:$port tcp:$port")
                                         runAdbReverse(port)
+                                        Logger.i("AudioEngine", "ADB reverse successful")
                                     } catch (e: Exception) {
                                         if (isActive) {
                                             val cmd = "adb reverse tcp:$port tcp:$port"
+                                            Logger.e("AudioEngine", "ADB reverse failed", e)
                                             _state.value = StreamState.Error
                                             _lastError.value = "自动执行 ADB 端口映射失败: ${e.message}\n请在电脑端执行：$cmd"
                                         }
@@ -246,13 +254,12 @@ actual class AudioEngine actual constructor() {
                                     }
                                 }
                                 serverSocket = aSocket(selectorManager!!).tcp().bind("0.0.0.0", port = port)
-                                val msg = "监听端口 $port (0.0.0.0)"
-                                println(msg)
+                                Logger.i("AudioEngine", "Listening on port $port (0.0.0.0)")
                                 
                                 while (isActive) {
                                     val socket = serverSocket?.accept() ?: break
                                     activeSocket = socket
-                                    println("接受来自 ${socket.remoteAddress} 的连接")
+                                    Logger.i("AudioEngine", "Accepted TCP connection from ${socket.remoteAddress}")
                                     _state.value = StreamState.Streaming
                                     _lastError.value = null
                                     
@@ -262,19 +269,20 @@ actual class AudioEngine actual constructor() {
                                         handleConnection(input, output)
                                     } catch (e: Exception) {
                                         if (!isNormalDisconnect(e)) {
-                                            e.printStackTrace()
+                                            Logger.e("AudioEngine", "TCP connection error", e)
                                             _lastError.value = "连接处理错误: ${e.message}"
                                         }
                                     } finally {
                                         activeSocket = null
                                         socket.close()
+                                        Logger.i("AudioEngine", "TCP connection closed, waiting for new connection")
                                         _state.value = StreamState.Connecting
                                     }
                                 }
                             } catch (e: BindException) {
                                 if (isActive) {
                                     val msg = "端口 $port 已被占用。请关闭其他 AndroidMic 实例。"
-                                    println(msg)
+                                    Logger.e("AudioEngine", msg)
                                     _state.value = StreamState.Error
                                     _lastError.value = msg
                                 }
@@ -285,12 +293,13 @@ actual class AudioEngine actual constructor() {
                     } catch (e: Exception) {
                         if (isActive) {
                             if (!isNormalDisconnect(e)) {
-                                e.printStackTrace()
+                                Logger.e("AudioEngine", "Server error", e)
                                 _state.value = StreamState.Error
                                 _lastError.value = "服务器错误: ${e.message}"
                             }
                         }
                     } finally {
+                        Logger.d("AudioEngine", "Cleaning up server resources")
                         serverSocket?.close()
                         serverSocket = null
                         btNotifier?.close()
@@ -300,6 +309,7 @@ actual class AudioEngine actual constructor() {
                         if (_state.value != StreamState.Error) {
                             _state.value = StreamState.Idle
                         }
+                        Logger.i("AudioEngine", "AudioEngine stopped")
                     }
                 }.also { job = it }
             }
@@ -313,7 +323,7 @@ actual class AudioEngine actual constructor() {
         val check1String = check1Packet.readText()
         
         if (!check1String.equals(CHECK_1)) {
-            println("握手失败: 收到 $check1String")
+            Logger.e("AudioEngine", "Handshake failed: received $check1String")
             return
         }
 
@@ -467,7 +477,7 @@ actual class AudioEngine actual constructor() {
         try {
             sendChannel?.send(MessageWrapper(mute = MuteMessage(muted)))
         } catch (e: Exception) {
-            println("Failed to send mute message: ${e.message}")
+            Logger.e("AudioEngine", "Failed to send mute message", e)
         }
     }
     
