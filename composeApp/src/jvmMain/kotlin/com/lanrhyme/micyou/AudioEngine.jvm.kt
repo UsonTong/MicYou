@@ -14,7 +14,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.protobuf.*
 import kotlinx.serialization.*
 import java.net.BindException
-import java.io.EOFException
 import java.io.IOException
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -27,13 +26,9 @@ import de.maxhenkel.rnnoise4j.Denoiser
 import javax.bluetooth.*
 import javax.microedition.io.*
 import io.ktor.utils.io.jvm.javaio.*
-import io.ktor.utils.io.*
-import kotlinx.coroutines.*
 import java.io.OutputStream
 import kotlin.coroutines.CoroutineContext
 import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 
 @OptIn(DelicateCoroutinesApi::class)
 fun OutputStream.toByteWriteChannel(context: CoroutineContext = Dispatchers.IO): ByteWriteChannel = GlobalScope.reader(context, autoFlush = true) {
@@ -753,19 +748,45 @@ actual class AudioEngine actual constructor() {
         }
 
         if (enableAGC && agcTargetLevel > 0) {
-            var peak = 0
+            // 采用更成熟的 RMS (均方根) 能量探测算法，而非简单的峰值检测
+            var sumSquares = 0.0
             for (s in processedShorts) {
-                val a = kotlin.math.abs(s.toInt())
-                if (a > peak) peak = a
+                val sample = s.toDouble() / 32768.0
+                sumSquares += sample * sample
             }
-            if (peak > 0) {
-                val desiredGain = (agcTargetLevel.toFloat() / peak.toFloat()).coerceIn(0.1f, 10.0f)
-                agcEnvelope = if (agcEnvelope == 0f) desiredGain else (agcEnvelope * 0.95f + desiredGain * 0.05f)
-                val gain = agcEnvelope
-                for (i in processedShorts.indices) {
-                    val v = (processedShorts[i].toInt() * gain).toInt().coerceIn(-32768, 32767)
-                    processedShorts[i] = v.toShort()
+            val rms = kotlin.math.sqrt(sumSquares / processedShorts.size.toDouble())
+            
+            // 目标能量（将 agcTargetLevel 映射到 0.0-1.0 范围）
+            val targetRms = (agcTargetLevel.toDouble() / 32768.0).coerceIn(0.01, 0.9)
+            
+            // 只有当声音能量超过环境噪音阈值时才进行增益调整
+            if (rms > 0.001) {
+                val error = targetRms / (rms + 1e-6)
+                val desiredGain = error.toFloat().coerceIn(0.5f, 5.0f)
+                
+                if (agcEnvelope == 0f) {
+                    agcEnvelope = 1.0f
                 }
+                
+                // 采用 WebRTC/Speex 风格的平滑逻辑
+                // 显著减慢增益的变化速度，使其在数秒内缓慢调整，而不是每帧剧烈变动
+                val smoothing = if (desiredGain < agcEnvelope) {
+                    0.005f // 非常缓慢的下降，防止声音变小
+                } else {
+                    0.01f  // 略快一点的上升，确保声音能恢复
+                }
+                agcEnvelope = agcEnvelope * (1f - smoothing) + desiredGain * smoothing
+            } else {
+                // 静音时，增益非常缓慢地回归 1.0
+                agcEnvelope = agcEnvelope * 0.999f + 1.0f * 0.001f
+            }
+            
+            // 最终增益应用，带有限幅保护
+            val finalGain = agcEnvelope.coerceIn(0.8f, 5.0f)
+            
+            for (i in processedShorts.indices) {
+                val v = (processedShorts[i].toInt() * finalGain).toInt().coerceIn(-32768, 32767)
+                processedShorts[i] = v.toShort()
             }
         }
 

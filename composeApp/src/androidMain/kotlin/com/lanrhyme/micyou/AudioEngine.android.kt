@@ -1,34 +1,43 @@
 package com.lanrhyme.micyou
 
-import android.Manifest
-import android.content.pm.PackageManager
+import android.content.Intent
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.media.audiofx.NoiseSuppressor
 import android.media.audiofx.AutomaticGainControl
-import androidx.core.app.ActivityCompat
-import io.ktor.network.selector.*
-import io.ktor.network.sockets.*
-import io.ktor.utils.io.*
-import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
+import android.media.audiofx.NoiseSuppressor
+import io.ktor.network.selector.SelectorManager
+import io.ktor.network.sockets.Socket
+import io.ktor.network.sockets.aSocket
+import io.ktor.network.sockets.openReadChannel
+import io.ktor.network.sockets.openWriteChannel
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.utils.io.jvm.javaio.toByteReadChannel
+import io.ktor.utils.io.readAvailable
+import io.ktor.utils.io.readFully
+import io.ktor.utils.io.readInt
+import io.ktor.utils.io.reader
+import io.ktor.utils.io.writeFully
+import io.ktor.utils.io.writeInt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.protobuf.*
-
+import kotlinx.serialization.protobuf.ProtoBuf
+import java.io.EOFException
+import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-
-import android.content.Intent
-import io.ktor.utils.io.jvm.javaio.toByteReadChannel
-import io.ktor.utils.io.*
-import kotlinx.coroutines.*
-import java.io.OutputStream
-
 import kotlin.coroutines.CoroutineContext
 
 @OptIn(DelicateCoroutinesApi::class)
@@ -230,9 +239,9 @@ actual class AudioEngine actual constructor() {
                                 // 优化 Socket 参数以应对 Wi-Fi 环境下的连接不稳
                                 keepAlive = true
                                 // 允许更长的等待时间
-                                socketTimeout = 10000 
+                                socketTimeout = 10000L
                                 // 禁用 Nagle 算法，降低音频包延迟
-                                tcpNoDelay = true
+                                noDelay = true
                             }
                             Logger.i("AudioEngine", "TCP connected to $targetIp:$port")
                             input = socket.openReadChannel()
@@ -512,8 +521,8 @@ actual class AudioEngine actual constructor() {
 
     private fun isNormalDisconnect(e: Throwable): Boolean {
         if (e is kotlinx.coroutines.CancellationException) return true
-        if (e is java.io.EOFException) return true
-        if (e is io.ktor.utils.io.core.EOFException) return true
+        if (e is EOFException) return true
+        if (e is io.ktor.utils.io.errors.EOFException) return true
         if (e is java.io.IOException) {
             val msg = e.message ?: ""
             if (msg.contains("Socket closed", ignoreCase = true)) return true
