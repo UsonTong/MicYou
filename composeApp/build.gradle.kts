@@ -153,7 +153,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Exe, TargetFormat.Deb, TargetFormat.Rpm)
             packageName = project.property("project.name").toString()
-            packageVersion = project.property("project.version").toString()
+            packageVersion = project.property("project.version").toString().substringBefore("-").substringBefore("hotfix")
             description = "MicYou Application"
             vendor = "LanRhyme"
             copyright = "Copyright (c) 2026 LanRhyme"
