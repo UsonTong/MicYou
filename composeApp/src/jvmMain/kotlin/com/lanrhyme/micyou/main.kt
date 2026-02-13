@@ -92,7 +92,13 @@ fun main() {
                 Separator()
                 Item(
                     text = "Exit",
-                    onClick = { exitApplication() }
+                    onClick = { 
+                        // 退出前尝试恢复默认麦克风 (使用 runBlocking 确保在进程结束前完成)
+                        kotlinx.coroutines.runBlocking {
+                            VBCableManager.setSystemDefaultMicrophone(toCable = false)
+                        }
+                        exitApplication() 
+                    }
                 )
             }
         )
@@ -109,7 +115,12 @@ fun main() {
             Window(
                 onCloseRequest = { 
                     viewModel.handleCloseRequest(
-                        onExit = { exitApplication() },
+                        onExit = { 
+                            kotlinx.coroutines.runBlocking {
+                                VBCableManager.setSystemDefaultMicrophone(toCable = false)
+                            }
+                            exitApplication() 
+                        },
                         onHide = { isVisible = false }
                     )
                 },
@@ -126,11 +137,21 @@ fun main() {
                         onMinimize = { windowState.isMinimized = true },
                         onClose = { 
                             viewModel.handleCloseRequest(
-                                onExit = { exitApplication() },
+                                onExit = { 
+                                    kotlinx.coroutines.runBlocking {
+                                        VBCableManager.setSystemDefaultMicrophone(toCable = false)
+                                    }
+                                    exitApplication() 
+                                },
                                 onHide = { isVisible = false }
                             )
                         },
-                        onExitApp = { exitApplication() },
+                        onExitApp = { 
+                            kotlinx.coroutines.runBlocking {
+                                VBCableManager.setSystemDefaultMicrophone(toCable = false)
+                            }
+                            exitApplication() 
+                        },
                         onHideApp = { isVisible = false },
                         onOpenSettings = { isSettingsOpen = true }
                     )

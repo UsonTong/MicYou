@@ -191,17 +191,17 @@ object VBCableManager {
         return null
     }
 
-    fun setSystemDefaultMicrophone() {
+    suspend fun setSystemDefaultMicrophone(toCable: Boolean = true) = withContext(Dispatchers.IO) {
+        val methodName = if (toCable) "SetDefaultCableOutput" else "RestoreDefaultMicrophone"
         val script = """
 ${'$'}csharpSource = @"
 using System;
 using System.Runtime.InteropServices;
+using System.Collections.Generic;
 
 namespace AudioSwitcher {
     using System;
     using System.Runtime.InteropServices;
-
-    // --- COM 接口（简化用于 VTable 使用）---
 
     [StructLayout(LayoutKind.Sequential)]
     public struct PropertyKey {
@@ -219,7 +219,6 @@ namespace AudioSwitcher {
         [FieldOffset(8)] public int iVal;
     }
 
-    // 仅保留 IPolicyConfig 作为 ComImport，因为我们直接实例化它
     [ComImport, Guid("870af99c-171d-4f9e-af0d-e63df40c2bc9")]
     public class PolicyConfigClient { }
 
@@ -240,7 +239,6 @@ namespace AudioSwitcher {
     }
 
     public class AudioHelper {
-        // VTable 方法的委托
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int EnumAudioEndpointsDelegate(IntPtr enumerator, int dataFlow, int state, out IntPtr collection);
 
@@ -271,7 +269,6 @@ namespace AudioSwitcher {
         private static void Release(IntPtr ptr) {
             if (ptr != IntPtr.Zero) {
                 try {
-                    // IUnknown::Release 总是插槽 2
                     var release = GetMethod<ReleaseDelegate>(ptr, 2);
                     release(ptr);
                 } catch { }
@@ -279,30 +276,37 @@ namespace AudioSwitcher {
         }
 
         public static void SetDefaultCableOutput() {
+            SetDeviceByName("CABLE Output", true);
+        }
+
+        public static void RestoreDefaultMicrophone() {
+            SetDeviceByName("CABLE Output", false);
+        }
+
+        private static void SetDeviceByName(string targetName, bool selectTarget) {
             IntPtr enumerator = IntPtr.Zero;
             IntPtr collection = IntPtr.Zero;
             
             try {
-                // 创建 MMDeviceEnumerator
                 Type enumeratorType = Type.GetTypeFromCLSID(new Guid("BCDE0395-E52F-467C-8E3D-C4579291692E"));
                 object enumeratorObj = Activator.CreateInstance(enumeratorType);
                 enumerator = Marshal.GetIUnknownForObject(enumeratorObj);
 
-                // EnumAudioEndpoints（插槽 3）
                 var enumEndpoints = GetMethod<EnumAudioEndpointsDelegate>(enumerator, 3);
                 int hr = enumEndpoints(enumerator, 1, 1, out collection); // eCapture=1, Active=1
-                if (hr != 0) throw new Exception("EnumAudioEndpoints failed: " + hr);
+                if (hr != 0) return;
 
-                // GetCount（Collection 的插槽 3）
                 var getCount = GetMethod<GetCountDelegate>(collection, 3);
                 int count;
                 getCount(collection, out count);
 
-                // 准备 Item 委托（插槽 4）
                 var getItem = GetMethod<ItemDelegate>(collection, 4);
 
                 Guid PKEY_Device_FriendlyName_FmtId = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0");
                 uint PKEY_Device_FriendlyName_Pid = 14;
+
+                string cableId = null;
+                List<string> otherIds = new List<string>();
 
                 for (int i = 0; i < count; i++) {
                     IntPtr device = IntPtr.Zero;
@@ -311,12 +315,8 @@ namespace AudioSwitcher {
                     
                     try {
                         getItem(collection, i, out device);
-                        
-                        // OpenPropertyStore（Device 的插槽 4）
                         var openStore = GetMethod<OpenPropertyStoreDelegate>(device, 4);
-                        openStore(device, 0, out store); // STGM_READ=0
-                        
-                        // GetValue（Store 的插槽 5）
+                        openStore(device, 0, out store);
                         var getValue = GetMethod<GetValueDelegate>(store, 5);
                         
                         PropertyKey key;
@@ -326,31 +326,16 @@ namespace AudioSwitcher {
                         PropVariant propVar;
                         getValue(store, ref key, out propVar);
                         
-                        if (propVar.vt == 31) { // VT_LPWSTR
+                        if (propVar.vt == 31) {
                             string name = Marshal.PtrToStringUni(propVar.pwszVal);
-                            // 如果我们要读取且不拥有缓冲区，严格来说不需要 PropVariantClear
-                            // 但对于 VT_LPWSTR 我们应该小心
-                            // 在这个简单的脚本中，我们主要依赖进程清理
-                            // 但从技术上讲，如果我们长时间在循环中执行此操作，我们应该清除它
-                            
-                            if (name != null && name.Contains("CABLE Output")) {
-                                // GetId（Device 的插槽 5）
-                                var getId = GetMethod<GetIdDelegate>(device, 5);
-                                getId(device, out idPtr);
-                                string id = Marshal.PtrToStringUni(idPtr);
-                                
-                                Console.WriteLine("Found device: " + name);
-                                
-                                try {
-                                    IPolicyConfig policyConfig = new PolicyConfigClient() as IPolicyConfig;
-                                    policyConfig.SetDefaultEndpoint(id, 0); // eConsole
-                                    policyConfig.SetDefaultEndpoint(id, 1); // eMultimedia
-                                    policyConfig.SetDefaultEndpoint(id, 2); // eCommunications
-                                    Console.WriteLine("Set as default successfully.");
-                                } catch (Exception ex) {
-                                    Console.WriteLine("Error setting default endpoint: " + ex.Message);
-                                }
-                                return;
+                            var getId = GetMethod<GetIdDelegate>(device, 5);
+                            getId(device, out idPtr);
+                            string id = Marshal.PtrToStringUni(idPtr);
+
+                            if (name != null && name.Contains(targetName)) {
+                                cableId = id;
+                            } else {
+                                otherIds.Add(id);
                             }
                         }
                     } finally {
@@ -359,11 +344,18 @@ namespace AudioSwitcher {
                         Release(device);
                     }
                 }
-                Console.WriteLine("CABLE Output not found in active devices.");
-            } catch (Exception e) {
-                Console.WriteLine("Error in AudioHelper: " + e.Message);
-                Console.WriteLine(e.StackTrace);
-            } finally {
+
+                string finalId = selectTarget ? cableId : (otherIds.Count > 0 ? otherIds[0] : null);
+                
+                if (finalId != null) {
+                    try {
+                        IPolicyConfig policyConfig = new PolicyConfigClient() as IPolicyConfig;
+                        policyConfig.SetDefaultEndpoint(finalId, 0);
+                        policyConfig.SetDefaultEndpoint(finalId, 1);
+                        policyConfig.SetDefaultEndpoint(finalId, 2);
+                    } catch {}
+                }
+            } catch {} finally {
                 Release(collection);
                 Release(enumerator);
             }
@@ -373,7 +365,7 @@ namespace AudioSwitcher {
 "@
 
 Add-Type -TypeDefinition ${'$'}csharpSource
-[AudioSwitcher.AudioHelper]::SetDefaultCableOutput()
+[AudioSwitcher.AudioHelper]::$methodName()
 """.trimIndent()
         
         try {

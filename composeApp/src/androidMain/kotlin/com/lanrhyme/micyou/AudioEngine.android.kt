@@ -303,7 +303,7 @@ actual class AudioEngine actual constructor() {
                                     val magic = try {
                                         input.readInt()
                                     } catch (e: Exception) {
-                                        if (isActive && _state.value == StreamState.Streaming) {
+                                        if (isActive && _state.value == StreamState.Streaming && !isNormalDisconnect(e)) {
                                             Logger.d("AudioEngine", "Reader loop: socket closed or EOF: ${e.message}")
                                         }
                                         break // Exit loop on EOF/IOException
@@ -331,7 +331,7 @@ actual class AudioEngine actual constructor() {
                                     }
                                 }
                             } catch (e: Exception) {
-                                if (isActive && _state.value == StreamState.Streaming) {
+                                if (isActive && _state.value == StreamState.Streaming && !isNormalDisconnect(e)) {
                                     Logger.e("AudioEngine", "Error reading from socket", e)
                                 }
                             }
@@ -393,20 +393,10 @@ actual class AudioEngine actual constructor() {
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        if (isActive) {
-                            val msg = e.message ?: ""
-                            val isDisconnect = msg.contains("broken pipe", ignoreCase = true) ||
-                                              msg.contains("connection reset", ignoreCase = true) ||
-                                              msg.contains("closed", ignoreCase = true) ||
-                                              e is java.io.EOFException
-
-                            if (!isDisconnect) {
-                                Logger.e("AudioEngine", "Connection lost", e)
-                                _state.value = StreamState.Error
-                                _lastError.value = "连接断开: ${e.message}"
-                            } else {
-                                Logger.i("AudioEngine", "Disconnected by remote: ${e.message}")
-                            }
+                        if (isActive && !isNormalDisconnect(e)) {
+                            Logger.e("AudioEngine", "Connection lost", e)
+                            _state.value = StreamState.Error
+                            _lastError.value = "连接断开: ${e.message}"
                         }
                     } finally {
                         Logger.d("AudioEngine", "Cleaning up resources")
@@ -518,6 +508,19 @@ actual class AudioEngine actual constructor() {
                 context.startService(intent)
             }
         }
+    }
+
+    private fun isNormalDisconnect(e: Throwable): Boolean {
+        if (e is kotlinx.coroutines.CancellationException) return true
+        if (e is java.io.EOFException) return true
+        if (e is io.ktor.utils.io.core.EOFException) return true
+        if (e is java.io.IOException) {
+            val msg = e.message ?: ""
+            if (msg.contains("Socket closed", ignoreCase = true)) return true
+            if (msg.contains("Connection reset", ignoreCase = true)) return true
+            if (msg.contains("Broken pipe", ignoreCase = true)) return true
+        }
+        return false
     }
     
     private fun calculateRMS(buffer: ByteArray, format: com.lanrhyme.micyou.AudioFormat): Float {

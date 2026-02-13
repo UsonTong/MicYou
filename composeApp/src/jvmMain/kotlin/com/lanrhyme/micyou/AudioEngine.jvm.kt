@@ -163,17 +163,31 @@ actual class AudioEngine actual constructor() {
         audioFormat: AudioFormat
     ) {
         if (isClient) return 
-        Logger.i("AudioEngine", "Starting JVM AudioEngine: mode=$mode, port=$port, sampleRate=${sampleRate.value}, channels=${channelCount.label}, format=${audioFormat.label}")
+        
         _lastError.value = null // 清除之前的错误
+        _state.value = StreamState.Connecting // 立即切换到连接中状态
+
+        Logger.i("AudioEngine", "Starting JVM AudioEngine: mode=$mode, port=$port, sampleRate=${sampleRate.value}, channels=${channelCount.label}, format=${audioFormat.label}")
+        
         val jobToJoin = startStopMutex.withLock {
             val currentJob = job
             if (currentJob != null && !currentJob.isCompleted) {
                 Logger.w("AudioEngine", "AudioEngine already running, ignoring start request")
                 null
             } else {
-                _state.value = StreamState.Connecting
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
+                        if (getPlatform().type == PlatformType.Desktop) {
+                            // 在后台线程异步切换麦克风，不阻塞连接逻辑的初始化
+                            launch {
+                                try {
+                                    VBCableManager.setSystemDefaultMicrophone(toCable = true)
+                                } catch (e: Exception) {
+                                    Logger.e("AudioEngine", "Failed to switch microphone", e)
+                                }
+                            }
+                        }
+
                         if (mode == ConnectionMode.Bluetooth) {
                             Logger.i("AudioEngine", "Starting Bluetooth server")
                             while (isActive) {
@@ -501,6 +515,13 @@ actual class AudioEngine actual constructor() {
 
     actual fun stop() {
          try {
+             if (getPlatform().type == PlatformType.Desktop) {
+                 // 在桌面端停止时恢复默认麦克风 (异步执行避免卡顿)
+                 @OptIn(DelicateCoroutinesApi::class)
+                 GlobalScope.launch(Dispatchers.IO) {
+                     VBCableManager.setSystemDefaultMicrophone(toCable = false)
+                 }
+             }
              job?.cancel()
              job = null
              activeSocket?.close()
@@ -524,7 +545,7 @@ actual class AudioEngine actual constructor() {
 
     private fun isNormalDisconnect(e: Throwable): Boolean {
         if (e is kotlinx.coroutines.CancellationException) return true
-        if (e is EOFException) return true
+        if (e is java.io.EOFException) return true
         if (e is ClosedReceiveChannelException) return true
         if (e is IOException) {
             val msg = e.message ?: ""
