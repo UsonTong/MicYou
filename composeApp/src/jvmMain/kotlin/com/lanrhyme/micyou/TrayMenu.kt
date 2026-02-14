@@ -89,14 +89,23 @@ object TrayMenu {
      * 按优先级尝试多个可能的图标路径
      */
     fun getDefaultIconPath(): String {
-        val candidatePaths = listOf(
-            // 1. 安装路径（生产环境）
-            "/opt/micyou/lib/MicYou.png",
-            // 2. 开发环境路径
-            System.getProperty("user.dir") + "/composeApp/src/commonMain/composeResources/drawable/app_icon.png",
-            "composeApp/src/commonMain/composeResources/drawable/app_icon.png",
-            "src/commonMain/composeResources/drawable/app_icon.png"
-        )
+        val isWindows = System.getProperty("os.name").lowercase().contains("windows")
+        
+        val candidatePaths = if (isWindows) {
+            listOf(
+                System.getProperty("user.dir") + "\\MicYou.ico",
+                System.getProperty("user.dir") + "/composeApp/src/commonMain/composeResources/drawable/app_icon.png",
+                "composeApp/src/commonMain/composeResources/drawable/app_icon.png",
+                "src/commonMain/composeResources/drawable/app_icon.png"
+            )
+        } else {
+            listOf(
+                "/opt/micyou/lib/MicYou.png",
+                System.getProperty("user.dir") + "/composeApp/src/commonMain/composeResources/drawable/app_icon.png",
+                "composeApp/src/commonMain/composeResources/drawable/app_icon.png",
+                "src/commonMain/composeResources/drawable/app_icon.png"
+            )
+        }
 
         for (path in candidatePaths) {
             val file = File(path)
@@ -105,7 +114,6 @@ object TrayMenu {
             }
         }
 
-        // 返回安装路径作为默认值（便于调试时看到预期路径）
         return candidatePaths.first()
     }
 
