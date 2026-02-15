@@ -1,123 +1,54 @@
 package com.lanrhyme.micyou
 
+// import androidx.compose.ui.window.Tray // Remove official Tray
+// import io.github.kdroidfilter.composenativetray.Tray // Remove failing dependency
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.window.WindowDraggableArea
-import androidx.compose.runtime.*
+import androidx.compose.material.Card
+import androidx.compose.material.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import java.awt.Font
-import javax.swing.UIManager
+import kotlinx.coroutines.runBlocking
 import micyou.composeapp.generated.resources.Res
 import micyou.composeapp.generated.resources.app_icon
 import org.jetbrains.compose.resources.painterResource
-
-/**
- * 托盘菜单配置
- */
-data class TrayMenuConfig(
-    val showHideText: String,
-    val connectText: String,
-    val settingsText: String,
-    val exitText: String
-)
-
-/**
- * 初始化系统托盘
- */
-fun initializeSystemTray(
-    config: TrayMenuConfig,
-    onShowHideClick: () -> Unit,
-    onConnectDisconnectClick: () -> Unit,
-    onSettingsClick: () -> Unit,
-    onExitClick: () -> Unit
-): TrayManager {
-    val trayManager = TrayManager.getInstance()
-
-    // 检查是否支持系统托盘
-    if (!trayManager.isSupported) {
-        Logger.w("Main", "SystemTray is not supported on this platform")
-        return trayManager
-    }
-
-    // 获取图标路径
-    val iconPath = TrayMenu.getDefaultIconPath()
-    Logger.i("Main", "Using icon path: $iconPath")
-
-    // 初始化托盘
-    trayManager.initialize(iconPath, "MicYou")
-
-    // 设置托盘状态
-    if (trayManager.state == TrayManager.TrayState.READY) {
-        // 清除现有菜单
-        trayManager.clearMenu()
-
-        // 添加菜单项
-        trayManager.addMenuItem(
-            text = config.showHideText,
-            enabled = true,
-            callback = onShowHideClick
-        )
-
-        trayManager.addMenuItem(
-            text = config.connectText,
-            enabled = true,
-            callback = onConnectDisconnectClick
-        )
-
-        trayManager.addMenuItem(
-            text = config.settingsText,
-            enabled = true,
-            callback = onSettingsClick
-        )
-
-        trayManager.addSeparator()
-
-        trayManager.addMenuItem(
-            text = config.exitText,
-            enabled = true,
-            callback = onExitClick
-        )
-
-        Logger.i("Main", "SystemTray initialized with menu items")
-    } else {
-        Logger.w("Main", "SystemTray initialization failed, state: ${trayManager.state}")
-    }
-
-    return trayManager
-}
-
-/**
- * 更新系统托盘菜单项
- */
-fun updateSystemTrayMenu(
-    trayManager: TrayManager,
-    config: TrayMenuConfig
-) {
-    if (trayManager.state != TrayManager.TrayState.READY) return
-
-    // 更新显示/隐藏菜单项
-    trayManager.updateMenuItem(
-        TrayMenu.DefaultItems.SHOW_HIDE,
-        text = config.showHideText
-    )
-
-    // 更新连接/断开菜单项
-    trayManager.updateMenuItem(
-        TrayMenu.DefaultItems.CONNECT_DISCONNECT,
-        text = config.connectText
-    )
-
-    Logger.d("Main", "Tray menu updated: showHide=${config.showHideText}, connect=${config.connectText}")
-}
+import java.awt.Font
+import java.awt.SystemTray
+import java.awt.TrayIcon
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
+import javax.imageio.ImageIO
+import javax.swing.UIManager
+import kotlin.system.exitProcess
 
 fun main() {
     Logger.init(JvmLogger())
-    // 设置编码属性以尝试修复 AWT 乱码
+    // 强制设置编码，必须在所有 GUI 初始化之前设置
     System.setProperty("file.encoding", "UTF-8")
     System.setProperty("sun.jnu.encoding", "UTF-8")
+    
     // 强制 AWT 使用 Unicode 并解决部分渲染问题
     System.setProperty("sun.java2d.noddraw", "true")
     System.setProperty("sun.java2d.d3d", "false") // 禁用 D3D 尝试解决部分系统黑屏
@@ -130,14 +61,25 @@ fun main() {
 
     // 设置全局 Swing 属性以修复托盘菜单乱码
     try {
-        val font = Font("Microsoft YaHei", Font.PLAIN, 12)
-        UIManager.put("MenuItem.font", font)
-        UIManager.put("Menu.font", font)
-        UIManager.put("PopupMenu.font", font)
-        UIManager.put("CheckBoxMenuItem.font", font)
-        UIManager.put("RadioButtonMenuItem.font", font)
-        UIManager.put("Label.font", font)
-        UIManager.put("Button.font", font)
+        // Windows 默认字体
+        var fontName = "Microsoft YaHei"
+        
+        // 检测操作系统，如果是 Linux 则尝试使用系统默认字体或常见的中文字体
+        val os = System.getProperty("os.name").lowercase()
+        if (os.contains("linux")) {
+            fontName = "WenQuanYi Micro Hei" // Linux 上常见的中文字体
+        }
+        
+        val font = Font(fontName, Font.PLAIN, 12)
+        val keys = arrayOf(
+            "MenuItem.font", "Menu.font", "PopupMenu.font", 
+            "CheckBoxMenuItem.font", "RadioButtonMenuItem.font",
+            "Label.font", "Button.font", "ToolTip.font"
+        )
+        
+        for (key in keys) {
+            UIManager.put(key, font)
+        }
         
         // 尝试使用系统外观
         UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName())
@@ -163,53 +105,161 @@ fun main() {
 
         // 图标资源
         val icon = painterResource(Res.drawable.app_icon)
+        
+        // 自定义托盘菜单状态
+        var isTrayMenuOpen by remember { mutableStateOf(false) }
+        var trayMenuPosition by remember { mutableStateOf<WindowPosition>(WindowPosition(Alignment.Center)) }
 
-        // 计算托盘菜单配置
-        val trayConfig = remember(strings, isVisible, isStreaming) {
-            TrayMenuConfig(
-                showHideText = if (isVisible) strings.trayHide else strings.trayShow,
-                connectText = if (isStreaming) strings.stop else strings.start,
-                settingsText = strings.settingsTitle,
-                exitText = strings.trayExit
-            )
-        }
-
-        // 初始化系统托盘（在 application 块内）
-        val trayManager = remember {
-            initializeSystemTray(
-                config = trayConfig,
-                onShowHideClick = { isVisible = !isVisible },
-                onConnectDisconnectClick = { viewModel.toggleStream() },
-                onSettingsClick = {
-                    isSettingsOpen = true
-                    isVisible = true
-                },
-                onExitClick = {
-                    // 退出前尝试恢复默认麦克风
-                    kotlinx.coroutines.runBlocking {
-                        VBCableManager.setSystemDefaultMicrophone(toCable = false)
-                    }
-                    // 清理托盘
-                    TrayManager.getInstance().dispose()
-                    exitApplication()
+        // AWT SystemTray Implementation
+        DisposableEffect(Unit) {
+            val tray = SystemTray.getSystemTray()
+            val image = try {
+                // 尝试从资源加载图标
+                val resourcePath = "composeResources/micyou.composeapp.generated.resources/drawable/app_icon.png"
+                val stream = Thread.currentThread().contextClassLoader.getResourceAsStream(resourcePath)
+                if (stream != null) {
+                    ImageIO.read(stream)
+                } else {
+                    // 如果找不到资源，尝试加载一个简单的 BufferedImage 或者报错
+                    // 这里可以回退到默认图标或继续尝试其他路径
+                     Logger.e("Tray", "Icon resource not found at $resourcePath")
+                     // 尝试直接用 ImageIO 读取文件（仅用于调试，实际打包后可能不可用）
+                     null
                 }
-            )
-        }
+            } catch (e: Exception) {
+                Logger.e("Tray", "Failed to load icon: ${e.message}")
+                null
+            }
 
-        // 监听状态变化，更新托盘菜单
-        LaunchedEffect(isVisible, isStreaming, strings) {
-            val config = TrayMenuConfig(
-                showHideText = if (isVisible) strings.trayHide else strings.trayShow,
-                connectText = if (isStreaming) strings.stop else strings.start,
-                settingsText = strings.settingsTitle,
-                exitText = strings.trayExit
-            )
-            updateSystemTrayMenu(trayManager, config)
+            if (image != null) {
+                val trayIcon = TrayIcon(image, "MicYou")
+                trayIcon.isImageAutoSize = true
+                
+                trayIcon.addMouseListener(object : MouseAdapter() {
+                    override fun mouseClicked(e: MouseEvent) {
+                        if (e.button == MouseEvent.BUTTON1) { // 左键
+                            isVisible = !isVisible
+                        } else if (e.button == MouseEvent.BUTTON3) { // 右键
+                            val point = e.point
+                            trayMenuPosition = WindowPosition(point.x.dp, point.y.dp)
+                            isTrayMenuOpen = true
+                        }
+                    }
+                })
+                
+                try {
+                    tray.add(trayIcon)
+                } catch (e: Exception) {
+                    Logger.e("Tray", "Failed to add tray icon: ${e.message}")
+                }
+                
+                onDispose {
+                    tray.remove(trayIcon)
+                }
+            } else {
+                onDispose {}
+            }
         }
+        
+        // 自定义托盘菜单窗口
+        if (isTrayMenuOpen) {
+            Window(
+                onCloseRequest = { isTrayMenuOpen = false },
+                visible = true,
+                title = "Tray Menu",
+                state = rememberWindowState(
+                    position = trayMenuPosition,
+                    width = 160.dp, // 菜单宽度
+                    height = 180.dp // 菜单高度，根据项目数量调整
+                ),
+                undecorated = true,
+                transparent = true,
+                alwaysOnTop = true,
+                resizable = false,
+                focusable = true // 必须可聚焦才能检测失去焦点
+            ) {
+                // 监听窗口失去焦点事件以关闭菜单
+                DisposableEffect(Unit) {
+                    val window = this@Window.window
+                    val focusListener = object : WindowAdapter() {
+                        override fun windowLostFocus(e: WindowEvent?) {
+                            isTrayMenuOpen = false
+                        }
+                    }
+                    window.addWindowFocusListener(focusListener)
+                    onDispose {
+                        window.removeWindowFocusListener(focusListener)
+                    }
+                }
+                
+                // 应用主题以支持深色模式
+                val themeMode by viewModel.uiState.collectAsState().let { state ->
+                    derivedStateOf { state.value.themeMode }
+                }
+                val seedColor by viewModel.uiState.collectAsState().let { state ->
+                    derivedStateOf { state.value.seedColor }
+                }
+                val seedColorObj = androidx.compose.ui.graphics.Color(seedColor.toInt())
+                
+                AppTheme(themeMode = themeMode, seedColor = seedColorObj) {
+                    Card(
+                        elevation = 4.dp,
+                        shape = RoundedCornerShape(8.dp),
+                        backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.surface
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            // 菜单项组件
+                            @Composable
+                            fun TrayMenuItem(text: String, onClick: () -> Unit) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { 
+                                            onClick()
+                                            isTrayMenuOpen = false
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                                ) {
+                                    Text(
+                                        text = text,
+                                        fontSize = androidx.compose.ui.unit.TextUnit.Unspecified,
+                                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
 
-        // 监听托盘状态变化
-        LaunchedEffect(trayManager.state) {
-            Logger.d("Main", "TrayManager state changed: ${trayManager.state}")
+                            TrayMenuItem(
+                                text = if (isVisible) strings.trayHide else strings.trayShow,
+                                onClick = { isVisible = !isVisible }
+                            )
+                            TrayMenuItem(
+                                text = if (isStreaming) strings.stop else strings.start,
+                                onClick = { viewModel.toggleStream() }
+                            )
+                            TrayMenuItem(
+                                text = strings.settingsTitle,
+                                onClick = {
+                                    isSettingsOpen = true
+                                    isVisible = true
+                                }
+                            )
+                            TrayMenuItem(
+                                text = strings.trayExit,
+                                onClick = {
+                                    runBlocking {
+                                        VBCableManager.setSystemDefaultMicrophone(toCable = false)
+                                    }
+                                    exitProcess(0)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // Main Window State
@@ -225,11 +275,10 @@ fun main() {
                 onCloseRequest = { 
                     viewModel.handleCloseRequest(
                         onExit = { 
-                            kotlinx.coroutines.runBlocking {
+                            runBlocking {
                                 VBCableManager.setSystemDefaultMicrophone(toCable = false)
                             }
-                            TrayManager.getInstance().dispose()
-                            exitApplication() 
+                            exitProcess(0)
                         },
                         onHide = { isVisible = false }
                     )
@@ -248,21 +297,19 @@ fun main() {
                         onClose = { 
                             viewModel.handleCloseRequest(
                                 onExit = { 
-                                    kotlinx.coroutines.runBlocking {
+                                    runBlocking {
                                         VBCableManager.setSystemDefaultMicrophone(toCable = false)
                                     }
-                                    TrayManager.getInstance().dispose()
-                                    exitApplication() 
+                                    exitProcess(0)
                                 },
                                 onHide = { isVisible = false }
                             )
                         },
                         onExitApp = { 
-                            kotlinx.coroutines.runBlocking {
+                            runBlocking {
                                 VBCableManager.setSystemDefaultMicrophone(toCable = false)
                             }
-                            TrayManager.getInstance().dispose()
-                            exitApplication() 
+                            exitProcess(0)
                         },
                         onHideApp = { isVisible = false },
                         onOpenSettings = { isSettingsOpen = true }
@@ -307,14 +354,6 @@ fun main() {
                         )
                     }
                 }
-            }
-        }
-
-        // 应用退出时清理托盘
-        DisposableEffect(Unit) {
-            onDispose {
-                Logger.i("Main", "Application disposed, cleaning up tray")
-                TrayManager.getInstance().dispose()
             }
         }
     }
