@@ -1,0 +1,187 @@
+package com.lanrhyme.micyou.network
+
+import com.lanrhyme.micyou.*
+import io.ktor.utils.io.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.decodeFromByteArray
+import kotlinx.serialization.encodeToByteArray
+import kotlinx.serialization.protobuf.ProtoBuf
+import java.io.EOFException
+import java.io.IOException
+
+/**
+ * 处理单个活动网络连接（TCP 或蓝牙）。
+ * 职责包括：
+ * 1. 握手 (Check1/Check2)
+ * 2. 接收和解析数据包（协议循环）
+ * 3. 发送控制消息
+ * 4. 将接收到的音频包分发给监听器
+ */
+class ConnectionHandler(
+    private val input: ByteReadChannel,
+    private val output: ByteWriteChannel,
+    private val onAudioPacketReceived: suspend (AudioPacketMessage) -> Unit,
+    private val onMuteStateChanged: (Boolean) -> Unit,
+    private val onError: (String) -> Unit
+) {
+    private val CHECK_1 = "MicYouCheck1"
+    private val CHECK_2 = "MicYouCheck2"
+    
+    @OptIn(ExperimentalSerializationApi::class)
+    private val proto = ProtoBuf { }
+    
+    private var sendChannel: Channel<MessageWrapper>? = null
+    private var writerJob: Job? = null
+
+    /**
+     * 启动连接处理循环。
+     * 此函数会挂起，直到连接关闭或发生错误。
+     */
+    suspend fun run() {
+        try {
+            // 1. 握手
+            if (!performHandshake()) {
+                onError("握手失败")
+                return
+            }
+
+            // 2. 设置发送通道
+            sendChannel = Channel(Channel.UNLIMITED)
+            
+            coroutineScope {
+                // 启动写入任务
+                writerJob = launch(Dispatchers.IO) {
+                    processSendQueue()
+                }
+
+                // 3. 启动读取循环
+                try {
+                    processReceiveLoop()
+                } finally {
+                    writerJob?.cancel()
+                }
+            }
+        } catch (e: Exception) {
+            if (!isNormalDisconnect(e)) {
+                Logger.e("ConnectionHandler", "连接错误", e)
+                onError("连接错误: ${e.message}")
+            }
+        } finally {
+            cleanup()
+        }
+    }
+
+    private suspend fun performHandshake(): Boolean {
+        try {
+            val check1Packet = input.readPacket(CHECK_1.length)
+            val check1String = check1Packet.readText()
+            
+            if (check1String != CHECK_1) {
+                Logger.e("ConnectionHandler", "握手失败: 收到 $check1String")
+                return false
+            }
+
+            output.writeFully(CHECK_2.encodeToByteArray())
+            output.flush()
+            return true
+        } catch (e: Exception) {
+            Logger.e("ConnectionHandler", "握手 IO 错误", e)
+            return false
+        }
+    }
+
+    private suspend fun processSendQueue() {
+        val channel = sendChannel ?: return
+        for (msg in channel) {
+            try {
+                @OptIn(ExperimentalSerializationApi::class)
+                val packetBytes = proto.encodeToByteArray(MessageWrapper.serializer(), msg)
+                val length = packetBytes.size
+                output.writeInt(PACKET_MAGIC)
+                output.writeInt(length)
+                output.writeFully(packetBytes)
+                output.flush()
+            } catch (e: Exception) {
+                break
+            }
+        }
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private suspend fun processReceiveLoop() {
+        while (currentCoroutineContext().isActive) {
+            val magic = input.readInt()
+            if (magic != PACKET_MAGIC) {
+                // Resync
+                var resyncMagic = magic
+                while (currentCoroutineContext().isActive) {
+                    val byte = input.readByte().toInt() and 0xFF
+                    resyncMagic = (resyncMagic shl 8) or byte
+                    if (resyncMagic == PACKET_MAGIC) {
+                        break
+                    }
+                }
+            }
+
+            val length = input.readInt()
+
+            if (length > 2 * 1024 * 1024) { // 2MB limit
+                continue
+            }
+
+            if (length <= 0) continue
+
+            val packetBytes = ByteArray(length)
+            input.readFully(packetBytes)
+
+            try {
+                val wrapper: MessageWrapper = proto.decodeFromByteArray(MessageWrapper.serializer(), packetBytes)
+
+                if (wrapper.mute != null) {
+                    onMuteStateChanged(wrapper.mute.isMuted)
+                }
+
+                val audioPacket = wrapper.audioPacket?.audioPacket
+                if (audioPacket != null) {
+                    // Check for backlog to avoid latency
+                    if (input.availableForRead > length * 5) {
+                         continue
+                    }
+                    onAudioPacketReceived(audioPacket)
+                }
+            } catch (e: Exception) {
+                Logger.e("ConnectionHandler", "Failed to decode packet", e)
+            }
+        }
+    }
+
+    suspend fun sendMuteState(muted: Boolean) {
+        try {
+            sendChannel?.send(MessageWrapper(mute = MuteMessage(muted)))
+        } catch (e: Exception) {
+            Logger.e("ConnectionHandler", "Failed to send mute message", e)
+        }
+    }
+
+    private fun cleanup() {
+        writerJob?.cancel()
+        sendChannel?.close()
+        sendChannel = null
+    }
+
+    private fun isNormalDisconnect(e: Throwable): Boolean {
+        if (e is kotlinx.coroutines.CancellationException) return true
+        if (e is EOFException) return true
+        if (e is ClosedReceiveChannelException) return true
+        if (e is IOException) {
+            val msg = e.message ?: ""
+            if (msg.contains("Socket closed", ignoreCase = true)) return true
+            if (msg.contains("Connection reset", ignoreCase = true)) return true
+            if (msg.contains("Broken pipe", ignoreCase = true)) return true
+        }
+        return false
+    }
+}

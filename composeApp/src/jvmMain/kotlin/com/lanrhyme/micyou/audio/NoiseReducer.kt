@@ -14,13 +14,13 @@ class NoiseReducer(
     var enableNS: Boolean = false
     var nsType: NoiseReductionType = NoiseReductionType.Ulunas
 
-    // RNNoise instances
+    // RNNoise 实例
     private var denoiserLeft: Denoiser? = null
     private var denoiserRight: Denoiser? = null
     private var rnnoiseFrameLeft: ShortArray = ShortArray(0)
     private var rnnoiseFrameRight: ShortArray = ShortArray(0)
 
-    // Ulunas instances
+    // Ulunas 实例
     private var ulunasProcessorLeft: AudioProcessor? = null
     private var ulunasProcessorRight: AudioProcessor? = null
     private var ulunasFrameLeft: FloatArray = FloatArray(0)

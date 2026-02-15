@@ -11,7 +11,7 @@ class DereverbEffect : AudioEffect {
 
     override fun process(input: ShortArray, channelCount: Int): ShortArray {
         if (!enableDereverb || dereverbLevel <= 0f || channelCount <= 0) return input
-        if (channelCount > 2) return input // Only mono/stereo supported
+        if (channelCount > 2) return input // 仅支持单声道/立体声
 
         if (lastChannelCount != channelCount) {
             lastChannelCount = channelCount

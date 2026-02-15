@@ -1,14 +1,14 @@
 package com.lanrhyme.micyou.audio
 
 import com.lanrhyme.micyou.Logger
-import com.lanrhyme.micyou.PlatformUtils
+import com.lanrhyme.micyou.PlatformAdaptor
 import javax.sound.sampled.*
 
 /**
  * 音频输出管理器
  * 负责管理 SourceDataLine（音频输出设备），包括：
  * 1. 初始化音频输出（优先尝试 VB-CABLE，失败则回退到默认设备）
- * 2. Linux 平台的音频重定向
+ * 2. 平台相关的音频重定向
  * 3. 写入音频数据
  * 4. 监听状态管理
  */
@@ -16,7 +16,7 @@ class AudioOutputManager {
     private var monitoringLine: SourceDataLine? = null
     private var isUsingCable = false
     private var isMonitoring = false
-    private var originalDefaultSink: String? = null
+    private var platformAudioToken: Any? = null
 
     /**
      * 初始化音频输出设备
@@ -31,18 +31,8 @@ class AudioOutputManager {
 
         Logger.d("AudioOutputManager", "初始化音频输出: 采样率=$sampleRate, 声道数=$channelCount")
         
-        // 在 Linux 平台重定向音频输出到虚拟设备
-        if (PlatformUtils.isLinux) {
-            originalDefaultSink = PlatformUtils.getDefaultSink()
-            Logger.i("AudioOutputManager", "Linux平台：保存原始默认音频输出设备: $originalDefaultSink")
-            
-            val success = PlatformUtils.redirectAudioToVirtualDevice()
-            if (success) {
-                Logger.i("AudioOutputManager", "成功重定向音频输出到虚拟设备")
-            } else {
-                Logger.w("AudioOutputManager", "音频重定向失败，可能影响内录功能")
-            }
-        }
+        // 配置平台相关的音频输出（如 Linux 重定向）
+        platformAudioToken = PlatformAdaptor.configureAudioOutput()
 
         val audioFormat = AudioFormat(
             sampleRate.toFloat(),
@@ -114,8 +104,8 @@ class AudioOutputManager {
      */
     fun write(buffer: ByteArray, offset: Int, length: Int) {
         // 只有在既没使用虚拟电缆也没开启监听时才静音
-        // 在 Linux 平台上，音频需要发送到虚拟设备，不应静音
-        if (!isUsingCable && !isMonitoring && !PlatformUtils.isLinux) {
+        // 在某些平台（如 Linux），音频可能需要发送到虚拟设备作为输出，不应静音
+        if (!isUsingCable && !isMonitoring && !PlatformAdaptor.usesSystemAudioSinkForVirtualOutput) {
             // 静音处理：将缓冲区填零
             buffer.fill(0, offset, offset + length)
         }
@@ -160,16 +150,10 @@ class AudioOutputManager {
         monitoringLine?.close()
         monitoringLine = null
         
-        // 在 Linux 平台恢复原始默认音频输出设备
-        if (PlatformUtils.isLinux && originalDefaultSink != null) {
-            Logger.i("AudioOutputManager", "Linux平台：恢复原始默认音频输出设备: $originalDefaultSink")
-            val success = PlatformUtils.restoreDefaultSink(originalDefaultSink!!)
-            if (success) {
-                Logger.i("AudioOutputManager", "成功恢复原始音频输出设备")
-            } else {
-                Logger.w("AudioOutputManager", "恢复原始音频输出设备失败")
-            }
-            originalDefaultSink = null
+        // 恢复平台相关的音频输出设置
+        if (platformAudioToken != null) {
+            PlatformAdaptor.restoreAudioOutput(platformAudioToken)
+            platformAudioToken = null
         }
     }
 }

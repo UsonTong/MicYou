@@ -9,7 +9,7 @@ class ResamplerEffect : AudioEffect {
     private var resamplePrevFrame: ShortArray = ShortArray(0)
     private var scratchResampledShorts: ShortArray = ShortArray(0)
     
-    // Playback ratio control
+    // 播放比率控制
     var playbackRatioIntegral: Double = 0.0
         private set
 
@@ -20,8 +20,8 @@ class ResamplerEffect : AudioEffect {
         
         val processedShortCount = resampleInterleavedShorts(input, channelCount, playbackRatio)
         
-        // If the count matches input size, it might be that we didn't resample enough or it was a pass-through
-        // But for safety and API consistency, we return the valid part of scratch buffer
+        // 如果计数与输入大小匹配，可能是重采样不足或透传
+        // 但为了安全和 API 一致性，我们返回 scratch 缓冲区的有效部分
         return scratchResampledShorts.copyOf(processedShortCount)
     }
     
@@ -52,7 +52,7 @@ class ResamplerEffect : AudioEffect {
         if (channelCount <= 0) return 0
         val inputFrames = processedShorts.size / channelCount
         if (inputFrames <= 1) {
-            // Not enough frames to interpolate, just copy to scratch
+            // 没有足够的帧进行插值，只需复制到 scratch
             if (scratchResampledShorts.size < processedShorts.size) {
                 scratchResampledShorts = ShortArray(processedShorts.size)
             }

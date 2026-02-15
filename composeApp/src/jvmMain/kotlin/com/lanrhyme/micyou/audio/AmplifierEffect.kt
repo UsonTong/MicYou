@@ -1,6 +1,11 @@
 package com.lanrhyme.micyou.audio
 
+/**
+ * 放大器效果器。
+ * 简单的线性音量放大。
+ */
 class AmplifierEffect : AudioEffect {
+    /** 放大倍数 (1.0 = 原始音量) */
     var amplification: Float = 1.0f
 
     override fun process(input: ShortArray, channelCount: Int): ShortArray {
