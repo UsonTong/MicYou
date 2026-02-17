@@ -40,6 +40,10 @@ configurations.configureEach {
         if (requested.group == "org.jetbrains.skiko") {
             useVersion(skikoVersion)
         }
+        // 强制使用dorkbox/OS 1.11版本以修复60秒阻塞问题
+        if (requested.group == "com.dorkbox" && requested.name == "OS") {
+            useVersion("1.11")
+        }
     }
 }
 
