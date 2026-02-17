@@ -143,6 +143,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.core.ktx)
     debugImplementation(libs.compose.uiTooling)
 }
 
