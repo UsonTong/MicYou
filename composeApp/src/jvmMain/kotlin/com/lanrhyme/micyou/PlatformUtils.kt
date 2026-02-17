@@ -327,9 +327,41 @@ object PlatformUtils {
             }
         }
         
-        // 设置虚拟设备为默认sink
-        return setDefaultSink("MicYouVirtualSink")
+        // 获取当前默认sink的名称
+        val currentOriginalSink = getDefaultSink()
+        if (currentOriginalSink.isNullOrBlank()) {
+            println("无法获取当前默认sink")
+            return false
+        }
+        
+        // 保存原始sink信息，用于后续恢复
+        this.originalSink = currentOriginalSink
+        
+        // 使用pactl move-sink-input将当前音频流移动到虚拟设备
+        // 这样不会改变系统的默认输出设备，避免与easyeffects冲突
+        return try {
+            val process = ProcessBuilder(
+                "pactl", "move-sink-input", "0", "MicYouVirtualSink"
+            ).redirectErrorStream(true).start()
+            
+            val output = process.inputStream.bufferedReader().readText()
+            val exitCode = process.waitFor()
+            
+            if (exitCode == 0) {
+                println("成功将音频流移动到MicYouVirtualSink")
+                true
+            } else {
+                println("移动音频流失败: $output")
+                false
+            }
+        } catch (e: Exception) {
+            println("移动音频流时出错: ${e.message}")
+            false
+        }
     }
+    
+    // 保存原始sink信息，用于恢复音频流
+    private var originalSink: String? = null
     
     /**
      * 恢复系统默认音频输出设备
@@ -339,20 +371,23 @@ object PlatformUtils {
         if (!isLinux || originalSink.isNullOrBlank()) return false
         
         return try {
-            val process = ProcessBuilder("pactl", "set-default-sink", originalSink)
-                .redirectErrorStream(true)
-                .start()
+            // 使用pactl move-sink-input将音频流移回原始设备
+            val process = ProcessBuilder(
+                "pactl", "move-sink-input", "0", originalSink
+            ).redirectErrorStream(true).start()
+            
             val output = process.inputStream.bufferedReader().readText()
-            process.waitFor()
-            if (process.exitValue() == 0) {
-                println("成功恢复默认输出设备为: $originalSink")
+            val exitCode = process.waitFor()
+            
+            if (exitCode == 0) {
+                println("成功恢复音频流到原始设备: $originalSink")
                 true
             } else {
-                println("恢复默认输出设备失败: $output")
+                println("恢复音频流失败: $output")
                 false
             }
         } catch (e: Exception) {
-            println("恢复默认输出设备时出错: ${e.message}")
+            println("恢复音频流时出错: ${e.message}")
             false
         }
     }
