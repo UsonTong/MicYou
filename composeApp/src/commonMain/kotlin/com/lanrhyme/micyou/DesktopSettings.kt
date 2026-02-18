@@ -303,25 +303,13 @@ fun SettingsContent(section: SettingsSection, viewModel: MainViewModel) {
 
                          Text(strings.themeColorLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                          val isSeedColorEnabled = !state.useDynamicColor
-                         LazyRow(
-                             horizontalArrangement = Arrangement.spacedBy(12.dp),
+                         ColorSelectorWithPicker(
+                             selectedColor = state.seedColor,
+                             presetColors = seedColors,
+                             onColorSelected = { viewModel.setSeedColor(it) },
+                             enabled = isSeedColorEnabled,
                              modifier = Modifier.fillMaxWidth().then(if(!isSeedColorEnabled) Modifier.alpha(0.5f) else Modifier)
-                         ) {
-                             items(seedColors) { colorHex ->
-                                 val color = Color(colorHex.toInt())
-                                 Box(
-                                     modifier = Modifier
-                                         .size(40.dp)
-                                         .background(color, CircleShape)
-                                         .clickable(enabled = isSeedColorEnabled) { viewModel.setSeedColor(colorHex) }
-                                         .then(
-                                             if (state.seedColor == colorHex) {
-                                                 Modifier.padding(2.dp).background(MaterialTheme.colorScheme.onSurface, CircleShape).padding(2.dp).background(color, CircleShape)
-                                             } else Modifier
-                                         )
-                                 )
-                             }
-                         }
+                         )
                      }
                 }
             }
