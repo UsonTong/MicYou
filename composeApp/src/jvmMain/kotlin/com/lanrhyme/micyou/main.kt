@@ -26,6 +26,8 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.lanrhyme.micyou.platform.PlatformInfo
+import com.lanrhyme.micyou.util.JvmLogger
 import dorkbox.systemTray.MenuItem
 import kotlinx.coroutines.runBlocking
 import micyou.composeapp.generated.resources.Res
@@ -42,30 +44,23 @@ import javax.swing.UIManager
 import kotlin.system.exitProcess
 
 fun main() {
-    Logger.init(JvmLogger())
-    // 强制设置编码，必须在所有 GUI 初始化之前设置
+    JvmLogger.init()
+    Logger.init(JvmLogger)
     System.setProperty("file.encoding", "UTF-8")
     System.setProperty("sun.jnu.encoding", "UTF-8")
     
-    // 强制 AWT 使用 Unicode 并解决部分渲染问题
     System.setProperty("sun.java2d.noddraw", "true")
-    System.setProperty("sun.java2d.d3d", "false") // 禁用 D3D 尝试解决部分系统黑屏
+    System.setProperty("sun.java2d.d3d", "false")
     
-    // 修复 Windows 10 上可能出现的透明/黑色窗口问题 (渲染兼容性)
-    // 优先尝试使用 SOFTWARE_FAST，这在老旧设备或驱动不兼容的 Win10 上最稳定
     System.setProperty("skiko.renderApi", "SOFTWARE_FAST")
-    System.setProperty("skiko.vsync", "false") // 禁用 vsync 解决部分显卡导致的渲染延迟
+    System.setProperty("skiko.vsync", "false")
     System.setProperty("skiko.fps.enabled", "false")
 
-    // 设置全局 Swing 属性以修复托盘菜单乱码
     try {
-        // Windows 默认字体
         var fontName = "Microsoft YaHei"
         
-        // 检测操作系统，如果是 Linux 则尝试使用系统默认字体或常见的中文字体
-        val os = System.getProperty("os.name").lowercase()
-        if (os.contains("linux")) {
-            fontName = "WenQuanYi Micro Hei" // Linux 上常见的中文字体
+        if (PlatformInfo.isLinux) {
+            fontName = "WenQuanYi Micro Hei"
         }
         
         val font = Font(fontName, Font.PLAIN, 12)
@@ -79,7 +74,6 @@ fun main() {
             UIManager.put(key, font)
         }
         
-        // 尝试使用系统外观
         UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName())
     } catch (e: Exception) {
         e.printStackTrace()
@@ -101,16 +95,11 @@ fun main() {
         }
         val isStreaming = streamState == StreamState.Streaming || streamState == StreamState.Connecting
 
-        // 图标资源
         val icon = painterResource(Res.drawable.app_icon)
         
-        // SystemTray Implementation
-        val osName = System.getProperty("os.name").lowercase()
-        val isLinux = osName.contains("linux")
         val systemTrayState = remember { mutableStateOf<dorkbox.systemTray.SystemTray?>(null) }
         
-        // Linux: Dorkbox (Support Wayland/AppIndicator)
-        if (isLinux) {
+        if (PlatformInfo.isLinux) {
             DisposableEffect(Unit) {
                 var tray: dorkbox.systemTray.SystemTray? = null
                 try {
@@ -124,7 +113,6 @@ fun main() {
                 } else {
                     systemTrayState.value = tray
                     
-                    // Load icon
                     val resourcePath = "composeResources/micyou.composeapp.generated.resources/drawable/app_icon.png"
                     val stream = Thread.currentThread().contextClassLoader.getResourceAsStream(resourcePath)
                     if (stream != null) {
@@ -145,23 +133,21 @@ fun main() {
                 }
             }
             
-            // Update menu items based on state
             val tray = systemTrayState.value
             if (tray != null) {
                 val showHideItem = remember(tray) { 
-                    MenuItem(strings.trayShow) { /* placeholder */ } 
+                    MenuItem(strings.trayShow) { } 
                 }
                 val streamItem = remember(tray) { 
-                    MenuItem(strings.start) { /* placeholder */ } 
+                    MenuItem(strings.start) { } 
                 }
                 val settingsItem = remember(tray) { 
-                    MenuItem(strings.settingsTitle) { /* placeholder */ } 
+                    MenuItem(strings.settingsTitle) { } 
                 }
                 val exitItem = remember(tray) { 
-                    MenuItem(strings.trayExit) { /* placeholder */ } 
+                    MenuItem(strings.trayExit) { } 
                 }
                 
-                // Initial setup - add items once
                 DisposableEffect(tray) {
                     tray.menu.add(showHideItem)
                     tray.menu.add(streamItem)
@@ -170,7 +156,6 @@ fun main() {
                     onDispose { }
                 }
                 
-                // Update properties
                 androidx.compose.runtime.SideEffect {
                     showHideItem.text = if (isVisible) strings.trayHide else strings.trayShow
                     showHideItem.setCallback { 
@@ -198,7 +183,6 @@ fun main() {
                 }
             }
         } else {
-            // Windows/Mac: AWT SystemTray (Better native integration especially for click events)
             var isTrayMenuOpen by remember { mutableStateOf(false) }
             var trayMenuPosition by remember { mutableStateOf<WindowPosition>(WindowPosition(Alignment.Center)) }
 
@@ -295,7 +279,6 @@ fun main() {
                 }
             }
 
-            // Custom Tray Menu Window for AWT implementation
             if (isTrayMenuOpen) {
                 Logger.d("Tray", "Opening tray menu window at: $trayMenuPosition")
                 Window(
@@ -406,14 +389,12 @@ fun main() {
             }
         }
 
-        // Main Window State
         val windowState = rememberWindowState(
             width = 600.dp, 
             height = 240.dp,
             position = WindowPosition(Alignment.Center)
         )
 
-        // Main Window (Undecorated)
         if (isVisible) {
             Window(
                 onCloseRequest = { 
@@ -431,7 +412,7 @@ fun main() {
                 title = strings.appName,
                 icon = icon,
                 undecorated = true,
-                transparent = true, // Allows rounded corners via Surface in DesktopHome
+                transparent = true,
                 resizable = false
             ) {
                 WindowDraggableArea {
@@ -462,7 +443,6 @@ fun main() {
             }
         }
 
-        // Settings Window
         if (isSettingsOpen) {
             val settingsState = rememberWindowState(
                 width = 530.dp,
@@ -477,7 +457,6 @@ fun main() {
                 icon = icon,
                 resizable = false
             ) {
-                // Re-use theme logic from AppTheme but apply to settings window content
                 val themeMode by viewModel.uiState.collectAsState().let { state ->
                     derivedStateOf { state.value.themeMode }
                 }

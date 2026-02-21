@@ -1,45 +1,41 @@
 package com.lanrhyme.micyou
 
-/**
- * 平台相关功能的 JVM 实现。
- * 处理音频设备重定向和 ADB 操作。
- */
+import com.lanrhyme.micyou.platform.AdbManager
+import com.lanrhyme.micyou.platform.PlatformInfo
+import java.io.File
+
 actual object PlatformAdaptor {
     actual fun configureAudioOutput(): Any? {
-        if (PlatformUtils.isLinux) {
-            val original = PlatformUtils.getDefaultSink()
-            Logger.i("PlatformAdaptor", "Linux: 保存原始音频输出: $original")
-            if (PlatformUtils.redirectAudioToVirtualDevice()) {
-                Logger.i("PlatformAdaptor", "Linux: 音频已重定向到虚拟设备")
-                return original
-            } else {
-                Logger.w("PlatformAdaptor", "Linux: 音频重定向失败")
-            }
-        }
         return null
     }
 
     actual fun restoreAudioOutput(token: Any?) {
-        if (PlatformUtils.isLinux && token is String) {
-            Logger.i("PlatformAdaptor", "Linux: 恢复原始音频输出: $token")
-            PlatformUtils.restoreDefaultSink(token)
-        }
     }
     
     actual fun runAdbReverse(port: Int): Boolean {
-        return try {
-            AdbManager.runAdbReverse(port)
-            true
-        } catch (e: Exception) {
-            Logger.e("PlatformAdaptor", "ADB reverse 失败", e)
-            false
-        }
+        return AdbManager.runAdbReverse(port)
     }
     
     actual fun cleanupTempFiles() {
-        PlatformUtils.cleanupTempFiles()
+        val tempDir = System.getProperty("java.io.tmpdir") ?: return
+        val tempDirFile = File(tempDir)
+        
+        tempDirFile.listFiles()?.forEach { file ->
+            if (file.name.startsWith("vbcable_") || 
+                file.name.startsWith("micyou_") ||
+                file.name.startsWith("setdefaultmic")) {
+                try {
+                    if (file.isDirectory) {
+                        file.deleteRecursively()
+                    } else {
+                        file.delete()
+                    }
+                } catch (e: Exception) {
+                }
+            }
+        }
     }
 
     actual val usesSystemAudioSinkForVirtualOutput: Boolean
-        get() = PlatformUtils.isLinux
+        get() = PlatformInfo.isLinux
 }

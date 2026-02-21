@@ -1,39 +1,30 @@
 package com.lanrhyme.micyou.audio
 
 import com.lanrhyme.micyou.Logger
-import com.lanrhyme.micyou.PlatformAdaptor
+import com.lanrhyme.micyou.platform.PlatformInfo
+import com.lanrhyme.micyou.platform.VirtualAudioDevice
 import javax.sound.sampled.*
 
-/**
- * 音频输出管理器
- * 负责管理 SourceDataLine（音频输出设备），包括：
- * 1. 初始化音频输出（优先尝试 VB-CABLE，失败则回退到默认设备）
- * 2. 平台相关的音频重定向
- * 3. 写入音频数据
- * 4. 监听状态管理
- */
 class AudioOutputManager {
-    private var monitoringLine: SourceDataLine? = null
-    private var isUsingCable = false
+    private var outputLine: SourceDataLine? = null
+    private var isUsingVirtualDevice = false
     private var isMonitoring = false
-    private var platformAudioToken: Any? = null
-
-    /**
-     * 初始化音频输出设备
-     * @param sampleRate 采样率
-     * @param channelCount 声道数
-     * @return 是否成功初始化
-     */
+    private var currentSampleRate = 0
+    private var currentChannelCount = 0
+    
     fun init(sampleRate: Int, channelCount: Int): Boolean {
-        if (monitoringLine != null) {
-            return true
+        if (outputLine != null) {
+            if (currentSampleRate == sampleRate && currentChannelCount == channelCount) {
+                return true
+            }
+            release()
         }
-
+        
         Logger.d("AudioOutputManager", "初始化音频输出: 采样率=$sampleRate, 声道数=$channelCount")
         
-        // 配置平台相关的音频输出（如 Linux 重定向）
-        platformAudioToken = PlatformAdaptor.configureAudioOutput()
-
+        currentSampleRate = sampleRate
+        currentChannelCount = channelCount
+        
         val audioFormat = AudioFormat(
             sampleRate.toFloat(),
             16,
@@ -41,119 +32,195 @@ class AudioOutputManager {
             true,
             false
         )
-
-        val info = DataLine.Info(SourceDataLine::class.java, audioFormat)
-
-        // 尝试寻找 VB-CABLE
-        val mixers = AudioSystem.getMixerInfo()
-        Logger.d("AudioOutputManager", "发现 ${mixers.size} 个混音器")
         
-        val cableMixerInfo = mixers
-            .filter { it.name.contains("CABLE Input", ignoreCase = true) }
-            .find { mixerInfo ->
-                try {
-                    val mixer = AudioSystem.getMixer(mixerInfo)
-                    mixer.isLineSupported(info)
-                } catch (e: Exception) {
-                    false
-                }
-            }
-
-        if (cableMixerInfo != null) {
-            try {
-                val mixer = AudioSystem.getMixer(cableMixerInfo)
-                monitoringLine = mixer.getLine(info) as SourceDataLine
-                isUsingCable = true
-                Logger.i("AudioOutputManager", "使用 VB-CABLE Input 进行音频输出: ${cableMixerInfo.name}")
-            } catch (e: Exception) {
-                Logger.e("AudioOutputManager", "初始化 VB-CABLE 失败", e)
-            }
+        val lineInfo = DataLine.Info(SourceDataLine::class.java, audioFormat)
+        
+        if (PlatformInfo.isLinux) {
+            val success = initLinux(audioFormat, lineInfo)
+            if (success) return true
         }
-
-        // 如果没有找到 VB-CABLE 或初始化失败，回退到默认设备
-        if (monitoringLine == null) {
-            Logger.w("AudioOutputManager", "未找到 VB-CABLE Input 或不支持该格式，尝试使用默认输出")
-            try {
-                monitoringLine = AudioSystem.getLine(info) as SourceDataLine
-                isUsingCable = false
-                Logger.i("AudioOutputManager", "使用系统默认音频输出")
-            } catch (e: Exception) {
-                Logger.e("AudioOutputManager", "获取默认系统输出线路失败", e)
+        
+        return initDefault(audioFormat, lineInfo)
+    }
+    
+    private fun initLinux(audioFormat: AudioFormat, lineInfo: DataLine.Info): Boolean {
+        Logger.d("AudioOutputManager", "Linux 平台: 尝试使用 PipeWire 虚拟设备")
+        
+        if (!VirtualAudioDevice.isAvailable()) {
+            Logger.w("AudioOutputManager", "PipeWire 不可用，回退到默认设备")
+            return false
+        }
+        
+        if (!VirtualAudioDevice.isSetupComplete()) {
+            Logger.i("AudioOutputManager", "设置 PipeWire 虚拟音频设备...")
+            if (!VirtualAudioDevice.setup()) {
+                Logger.e("AudioOutputManager", "设置虚拟音频设备失败")
                 return false
             }
         }
-
+        
+        val sinkName = VirtualAudioDevice.virtualSinkName
+        Logger.i("AudioOutputManager", "尝试连接到虚拟 Sink: $sinkName")
+        
+        val mixers = AudioSystem.getMixerInfo()
+        for (mixerInfo in mixers) {
+            val mixerName = mixerInfo.name.lowercase()
+            if (mixerName.contains("micyou") || mixerName.contains("virtual")) {
+                try {
+                    val mixer = AudioSystem.getMixer(mixerInfo)
+                    if (mixer.isLineSupported(lineInfo)) {
+                        outputLine = mixer.getLine(lineInfo) as SourceDataLine
+                        isUsingVirtualDevice = true
+                        Logger.i("AudioOutputManager", "使用虚拟设备: ${mixerInfo.name}")
+                        return openAndStartLine(audioFormat)
+                    }
+                } catch (e: Exception) {
+                    Logger.d("AudioOutputManager", "混音器 ${mixerInfo.name} 不支持此格式")
+                }
+            }
+        }
+        
+        Logger.w("AudioOutputManager", "未找到 PipeWire 虚拟设备混音器，使用 PulseAudio 方式")
+        return initPulseAudio(audioFormat)
+    }
+    
+    private fun initPulseAudio(audioFormat: AudioFormat): Boolean {
         try {
-            val bytesPerSecond = (sampleRate * channelCount * 2).coerceAtLeast(1)
-            // 缓冲区大小设为约 200ms
-            val bufferSizeBytes = (bytesPerSecond / 5).coerceIn(8192, 131072)
-            monitoringLine?.open(audioFormat, bufferSizeBytes)
-            monitoringLine?.start()
-            return true
+            val pulseMixer = AudioSystem.getMixerInfo().find { 
+                it.name.contains("pulse", ignoreCase = true) 
+            }
+            
+            if (pulseMixer != null) {
+                val mixer = AudioSystem.getMixer(pulseMixer)
+                if (mixer.isLineSupported(DataLine.Info(SourceDataLine::class.java, audioFormat))) {
+                    outputLine = mixer.getLine(DataLine.Info(SourceDataLine::class.java, audioFormat)) as SourceDataLine
+                    isUsingVirtualDevice = true
+                    Logger.i("AudioOutputManager", "使用 PulseAudio 混音器")
+                    return openAndStartLine(audioFormat)
+                }
+            }
         } catch (e: Exception) {
-            Logger.e("AudioOutputManager", "打开音频输出线路失败", e)
-            return false
+            Logger.w("AudioOutputManager", "PulseAudio 方式失败: ${e.message}")
+        }
+        
+        return false
+    }
+    
+    private fun initDefault(audioFormat: AudioFormat, lineInfo: DataLine.Info): Boolean {
+        Logger.d("AudioOutputManager", "尝试使用默认音频设备")
+        
+        if (PlatformInfo.isWindows) {
+            val cableMixer = findVBCableMixer(lineInfo)
+            if (cableMixer != null) {
+                try {
+                    outputLine = cableMixer.getLine(lineInfo) as SourceDataLine
+                    isUsingVirtualDevice = true
+                    Logger.i("AudioOutputManager", "使用 VB-CABLE Input")
+                    return openAndStartLine(audioFormat)
+                } catch (e: Exception) {
+                    Logger.e("AudioOutputManager", "初始化 VB-CABLE 失败", e)
+                }
+            }
+        }
+        
+        return try {
+            outputLine = AudioSystem.getLine(lineInfo) as SourceDataLine
+            isUsingVirtualDevice = false
+            Logger.i("AudioOutputManager", "使用系统默认音频输出")
+            openAndStartLine(audioFormat)
+        } catch (e: Exception) {
+            Logger.e("AudioOutputManager", "获取默认系统输出线路失败", e)
+            false
         }
     }
-
-    /**
-     * 写入音频数据
-     * @param buffer 音频数据缓冲区
-     * @param offset 偏移量
-     * @param length 长度
-     */
+    
+    private fun findVBCableMixer(lineInfo: DataLine.Info): Mixer? {
+        val mixers = AudioSystem.getMixerInfo()
+        
+        for (mixerInfo in mixers) {
+            if (mixerInfo.name.contains("CABLE Input", ignoreCase = true)) {
+                try {
+                    val mixer = AudioSystem.getMixer(mixerInfo)
+                    if (mixer.isLineSupported(lineInfo)) {
+                        return mixer
+                    }
+                } catch (e: Exception) {
+                    Logger.d("AudioOutputManager", "VB-CABLE 混音器检查失败: ${e.message}")
+                }
+            }
+        }
+        
+        return null
+    }
+    
+    private fun openAndStartLine(audioFormat: AudioFormat): Boolean {
+        return try {
+            val bytesPerSecond = (currentSampleRate * currentChannelCount * 2).coerceAtLeast(1)
+            val bufferSizeBytes = (bytesPerSecond / 5).coerceIn(8192, 131072)
+            
+            outputLine?.open(audioFormat, bufferSizeBytes)
+            outputLine?.start()
+            
+            Logger.d("AudioOutputManager", "音频输出线路已启动 (缓冲区: ${bufferSizeBytes}字节)")
+            true
+        } catch (e: Exception) {
+            Logger.e("AudioOutputManager", "打开音频输出线路失败", e)
+            outputLine = null
+            false
+        }
+    }
+    
     fun write(buffer: ByteArray, offset: Int, length: Int) {
-        // 只有在既没使用虚拟电缆也没开启监听时才静音
-        // 在某些平台（如 Linux），音频可能需要发送到虚拟设备作为输出，不应静音
-        if (!isUsingCable && !isMonitoring && !PlatformAdaptor.usesSystemAudioSinkForVirtualOutput) {
-            // 静音处理：将缓冲区填零
+        val shouldMute = !isUsingVirtualDevice && !isMonitoring && !usesSystemAudioSinkForVirtualOutput()
+        
+        if (shouldMute) {
             buffer.fill(0, offset, offset + length)
         }
-
+        
         try {
-            monitoringLine?.write(buffer, offset, length)
+            outputLine?.write(buffer, offset, length)
         } catch (e: Exception) {
             Logger.e("AudioOutputManager", "写入音频数据失败", e)
         }
     }
-
-    /**
-     * 获取输出缓冲区中排队的数据时长（毫秒）
-     * 用于控制播放速度（重采样）
-     */
+    
     fun getQueuedDurationMs(): Long {
-        val line = monitoringLine ?: return 0L
+        val line = outputLine ?: return 0L
         val bytesPerSecond = (line.format.sampleRate.toInt() * line.format.channels * 2).coerceAtLeast(1)
         val queuedBytes = (line.bufferSize - line.available()).coerceAtLeast(0)
         return queuedBytes * 1000L / bytesPerSecond.toLong()
     }
-
-    /**
-     * 清空输出缓冲区
-     */
+    
     fun flush() {
-        monitoringLine?.flush()
+        outputLine?.flush()
     }
-
-    /**
-     * 设置是否监听（当不使用虚拟声卡时，控制是否通过扬声器播放）
-     */
+    
     fun setMonitoring(enabled: Boolean) {
         isMonitoring = enabled
     }
-
-    /**
-     * 释放资源
-     */
+    
+    fun isUsingVirtualDevice(): Boolean = isUsingVirtualDevice
+    
     fun release() {
-        monitoringLine?.drain()
-        monitoringLine?.close()
-        monitoringLine = null
+        Logger.d("AudioOutputManager", "释放音频输出资源")
         
-        // 恢复平台相关的音频输出设置
-        if (platformAudioToken != null) {
-            PlatformAdaptor.restoreAudioOutput(platformAudioToken)
-            platformAudioToken = null
+        try {
+            outputLine?.drain()
+            outputLine?.close()
+        } catch (e: Exception) {
+            Logger.e("AudioOutputManager", "关闭音频输出线路时出错", e)
         }
+        
+        outputLine = null
+        isUsingVirtualDevice = false
+        
+        if (PlatformInfo.isLinux && VirtualAudioDevice.isSetupComplete()) {
+            Logger.i("AudioOutputManager", "清理 Linux 虚拟音频设备")
+            VirtualAudioDevice.cleanup()
+        }
+    }
+    
+    private fun usesSystemAudioSinkForVirtualOutput(): Boolean {
+        return PlatformInfo.isLinux
     }
 }

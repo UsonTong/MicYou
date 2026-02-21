@@ -3,6 +3,8 @@ package com.lanrhyme.micyou
 import com.lanrhyme.micyou.audio.AudioOutputManager
 import com.lanrhyme.micyou.audio.AudioProcessorPipeline
 import com.lanrhyme.micyou.network.NetworkServer
+import com.lanrhyme.micyou.platform.AdbManager
+import com.lanrhyme.micyou.platform.PlatformInfo
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,10 +12,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.math.sqrt
 
-/**
- * JVM 平台的音频引擎实现。
- * 作为协调者，负责组装网络服务、音频处理管道和音频输出管理。
- */
 actual class AudioEngine actual constructor() {
     private val _state = MutableStateFlow(StreamState.Idle)
     actual val streamState: Flow<StreamState> = _state
@@ -45,7 +43,6 @@ actual class AudioEngine actual constructor() {
         scope.launch {
             networkServer.state.collect { newState ->
                 if (newState == StreamState.Streaming) {
-                    // 建立新连接时重置音频管道
                     audioPipeline.reset()
                 }
                 _state.value = newState
@@ -102,10 +99,9 @@ actual class AudioEngine actual constructor() {
         
         _lastError.value = null
         
-        // 如果是USB模式，先执行ADB reverse
         if (mode == ConnectionMode.Usb) {
             Logger.i("AudioEngine", "正在为 USB 模式执行 ADB reverse，端口 $port")
-            if (PlatformAdaptor.runAdbReverse(port)) {
+            if (AdbManager.runAdbReverse(port)) {
                 Logger.i("AudioEngine", "ADB reverse 成功，USB 隧道已建立")
             } else {
                 val errorMsg = "ADB reverse 失败。请确保已安装 ADB 且 Android 设备已连接。\n或者手动运行: adb reverse tcp:$port tcp:$port"

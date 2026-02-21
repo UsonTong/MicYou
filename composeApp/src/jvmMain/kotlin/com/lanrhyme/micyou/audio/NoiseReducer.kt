@@ -1,6 +1,5 @@
 package com.lanrhyme.micyou.audio
 
-import com.lanrhyme.micyou.AudioProcessor
 import com.lanrhyme.micyou.NoiseReductionType
 import de.maxhenkel.rnnoise4j.Denoiser
 import java.io.File
