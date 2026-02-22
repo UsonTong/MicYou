@@ -146,9 +146,6 @@ class ConnectionHandler(
 
                 val audioPacket = wrapper.audioPacket?.audioPacket
                 if (audioPacket != null) {
-                    if (input.availableForRead > length * 8) {
-                        continue
-                    }
                     onAudioPacketReceived(audioPacket)
                 }
             } catch (e: Exception) {

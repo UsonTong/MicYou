@@ -6,6 +6,8 @@ import com.lanrhyme.micyou.network.NetworkServer
 import com.lanrhyme.micyou.platform.AdbManager
 import com.lanrhyme.micyou.platform.PlatformInfo
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -25,10 +27,16 @@ actual class AudioEngine actual constructor() {
     
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
+    private var audioProcessingJob: Job? = null
     private val startStopMutex = Mutex()
     
     private val audioOutputManager = AudioOutputManager()
     private val audioPipeline = AudioProcessorPipeline()
+    
+    private val audioPacketChannel = Channel<AudioPacketMessage>(
+        capacity = 32,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
     
     private val networkServer = NetworkServer(
         onAudioPacketReceived = { audioPacket ->
@@ -44,6 +52,9 @@ actual class AudioEngine actual constructor() {
             networkServer.state.collect { newState ->
                 if (newState == StreamState.Streaming) {
                     audioPipeline.reset()
+                    startAudioProcessing()
+                } else if (newState == StreamState.Idle || newState == StreamState.Error) {
+                    stopAudioProcessing()
                 }
                 _state.value = newState
             }
@@ -54,6 +65,52 @@ actual class AudioEngine actual constructor() {
                     _lastError.value = error
                 }
             }
+        }
+    }
+    
+    private fun startAudioProcessing() {
+        if (audioProcessingJob?.isActive == true) return
+        
+        audioProcessingJob = scope.launch(Dispatchers.Default) {
+            Logger.d("AudioEngine", "音频处理协程已启动")
+            while (isActive) {
+                try {
+                    val audioPacket = audioPacketChannel.receiveCatching().getOrNull() ?: break
+                    
+                    if (!audioOutputManager.init(audioPacket.sampleRate, audioPacket.channelCount)) {
+                        Logger.e("AudioEngine", "初始化音频输出失败")
+                        continue
+                    }
+
+                    val queuedMs = audioOutputManager.getQueuedDurationMs()
+                    
+                    val processedBuffer = audioPipeline.process(
+                        inputBuffer = audioPacket.buffer,
+                        audioFormat = audioPacket.audioFormat,
+                        channelCount = audioPacket.channelCount,
+                        queuedDurationMs = queuedMs
+                    )
+
+                    if (processedBuffer != null) {
+                        audioOutputManager.write(processedBuffer, 0, processedBuffer.size)
+
+                        val rms = calculateRMS(processedBuffer)
+                        _audioLevels.value = rms
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Logger.e("AudioEngine", "音频处理错误", e)
+                }
+            }
+            Logger.d("AudioEngine", "音频处理协程已停止")
+        }
+    }
+    
+    private fun stopAudioProcessing() {
+        audioProcessingJob?.cancel()
+        audioProcessingJob = null
+        while (audioPacketChannel.tryReceive().isSuccess) {
         }
     }
 
@@ -127,25 +184,10 @@ actual class AudioEngine actual constructor() {
     }
 
     private suspend fun processReceivedPacket(audioPacket: AudioPacketMessage) {
-        if (!audioOutputManager.init(audioPacket.sampleRate, audioPacket.channelCount)) {
-            Logger.e("AudioEngine", "初始化音频输出失败")
-            return
-        }
-
-        val queuedMs = audioOutputManager.getQueuedDurationMs()
-        
-        val processedBuffer = audioPipeline.process(
-            inputBuffer = audioPacket.buffer,
-            audioFormat = audioPacket.audioFormat,
-            channelCount = audioPacket.channelCount,
-            queuedDurationMs = queuedMs
-        )
-
-        if (processedBuffer != null) {
-            audioOutputManager.write(processedBuffer, 0, processedBuffer.size)
-
-            val rms = calculateRMS(processedBuffer)
-            _audioLevels.value = rms
+        try {
+            audioPacketChannel.send(audioPacket)
+        } catch (e: Exception) {
+            Logger.e("AudioEngine", "发送音频包到处理通道失败", e)
         }
     }
     
