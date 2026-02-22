@@ -9,7 +9,22 @@ enum class AppLanguage(val label: String, val code: String) {
     System("System / 跟随系统", "system"),
     Chinese("简体中文", "zh"),
     ChineseTraditional("繁體中文", "zh-TW"),
-    English("English", "en")
+    English("English", "en"),
+    Japanese("日本語", "ja"),
+    Korean("한국어", "ko"),
+    French("Français", "fr"),
+    German("Deutsch", "de"),
+    Spanish("Español", "es"),
+    Russian("Русский", "ru"),
+    Italian("Italiano", "it"),
+    Portuguese("Português", "pt"),
+    Arabic("العربية", "ar"),
+    Thai("ไทย", "th"),
+    Vietnamese("Tiếng Việt", "vi"),
+    Indonesian("Bahasa Indonesia", "id"),
+    Turkish("Türkçe", "tr"),
+    Polish("Polski", "pl"),
+    Dutch("Nederlands", "nl")
 }
 
 @Serializable
@@ -175,11 +190,41 @@ fun getStrings(language: AppLanguage): AppStrings {
         AppLanguage.Chinese -> "zh"
         AppLanguage.ChineseTraditional -> "zh-TW"
         AppLanguage.English -> "en"
+        AppLanguage.Japanese -> "ja"
+        AppLanguage.Korean -> "ko"
+        AppLanguage.French -> "fr"
+        AppLanguage.German -> "de"
+        AppLanguage.Spanish -> "es"
+        AppLanguage.Russian -> "ru"
+        AppLanguage.Italian -> "it"
+        AppLanguage.Portuguese -> "pt"
+        AppLanguage.Arabic -> "ar"
+        AppLanguage.Thai -> "th"
+        AppLanguage.Vietnamese -> "vi"
+        AppLanguage.Indonesian -> "id"
+        AppLanguage.Turkish -> "tr"
+        AppLanguage.Polish -> "pl"
+        AppLanguage.Dutch -> "nl"
         AppLanguage.System -> {
             val locale = Locale.current.toLanguageTag()
             when {
                 locale.startsWith("zh-TW") || locale.startsWith("zh-Hant") -> "zh-TW"
                 locale.startsWith("zh") -> "zh"
+                locale.startsWith("ja") -> "ja"
+                locale.startsWith("ko") -> "ko"
+                locale.startsWith("fr") -> "fr"
+                locale.startsWith("de") -> "de"
+                locale.startsWith("es") -> "es"
+                locale.startsWith("ru") -> "ru"
+                locale.startsWith("it") -> "it"
+                locale.startsWith("pt") -> "pt"
+                locale.startsWith("ar") -> "ar"
+                locale.startsWith("th") -> "th"
+                locale.startsWith("vi") -> "vi"
+                locale.startsWith("id") -> "id"
+                locale.startsWith("tr") -> "tr"
+                locale.startsWith("pl") -> "pl"
+                locale.startsWith("nl") -> "nl"
                 else -> "en"
             }
         }
@@ -192,11 +237,11 @@ fun getStrings(language: AppLanguage): AppStrings {
 
 private fun loadStringsFromResources(langCode: String): AppStrings {
     return try {
-        val resourcePath = when (langCode) {
-            "zh" -> "i18n/strings_zh.json"
-            "zh-TW" -> "i18n/strings_zh_tw.json"
-            else -> "i18n/strings_en.json"
+        val fileName = when (langCode) {
+            "zh-TW" -> "strings_zh_tw"
+            else -> "strings_$langCode"
         }
+        val resourcePath = "i18n/$fileName.json"
         
         val jsonString = readResourceFile(resourcePath)
         if (jsonString != null) {

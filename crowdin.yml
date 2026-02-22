@@ -13,3 +13,18 @@ files:
       two_letters_code:
         zh-CN: zh
         zh-TW: zh_tw
+        ja: ja
+        ko: ko
+        fr: fr
+        de: de
+        es-ES: es
+        ru: ru
+        it: it
+        pt-BR: pt
+        ar: ar
+        th: th
+        vi: vi
+        id: id
+        tr: tr
+        pl: pl
+        nl: nl
