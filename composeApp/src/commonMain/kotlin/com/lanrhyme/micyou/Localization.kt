@@ -2,8 +2,6 @@ package com.lanrhyme.micyou
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.intl.Locale
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 enum class AppLanguage(val label: String, val code: String) {
     System("System / 跟随系统", "system"),
@@ -12,7 +10,6 @@ enum class AppLanguage(val label: String, val code: String) {
     English("English", "en")
 }
 
-@Serializable
 data class AppStrings(
         val appName: String,
         val ipLabel: String,
@@ -626,46 +623,16 @@ val ZhTwStrings =
                 installDeviceFailed = "虛擬設備創建失敗，請檢查系統權限和音訊服務"
         )
 
-private var cachedStrings: MutableMap<String, AppStrings> = mutableMapOf()
+val LocalAppStrings = staticCompositionLocalOf { ZhStrings }
 
 fun getStrings(language: AppLanguage): AppStrings {
-    val langCode = when (language) {
-        AppLanguage.Chinese -> "zh"
-        AppLanguage.ChineseTraditional -> "zh-TW"
-        AppLanguage.English -> "en"
+    return when (language) {
+        AppLanguage.Chinese -> ZhStrings
+        AppLanguage.ChineseTraditional -> ZhTwStrings
+        AppLanguage.English -> EnStrings
         AppLanguage.System -> {
-            val locale = Locale.current.toLanguageTag()
-            when {
-                locale.startsWith("zh-TW") || locale.startsWith("zh-Hant") -> "zh-TW"
-                locale.startsWith("zh") -> "zh"
-                else -> "en"
-            }
+            val locale = Locale.current.language
+            if (locale.startsWith("zh")) ZhStrings else EnStrings
         }
-    }
-    
-    return cachedStrings.getOrPut(langCode) {
-        loadStringsFromResources(langCode)
     }
 }
-
-private fun loadStringsFromResources(langCode: String): AppStrings {
-    return try {
-        val resourcePath = when (langCode) {
-            "zh" -> "i18n/strings_zh.json"
-            "zh-TW" -> "i18n/strings_zh_tw.json"
-            else -> "i18n/strings_en.json"
-        }
-        
-        val jsonString = readResourceFile(resourcePath)
-        if (jsonString != null) {
-            json.decodeFromString<AppStrings>(jsonString)
-        } else {
-            AppStrings()
-        }
-    } catch (e: Exception) {
-        Logger.e("Localization", "Failed to load strings for $langCode: ${e.message}")
-        AppStrings()
-    }
-}
-
-expect fun readResourceFile(path: String): String?
