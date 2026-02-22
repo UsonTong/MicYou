@@ -13,6 +13,7 @@ files:
       two_letters_code:
         zh-CN: zh
         zh-TW: zh_tw
+        cat: cat
         ja: ja
         ko: ko
         fr: fr
