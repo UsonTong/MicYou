@@ -1,5 +1,6 @@
 package com.lanrhyme.micyou
 
+import com.lanrhyme.micyou.platform.BlackHoleManager
 import com.lanrhyme.micyou.platform.PlatformInfo
 import com.lanrhyme.micyou.platform.VirtualAudioDevice
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +33,7 @@ object VBCableManager {
                 VirtualAudioDevice.deviceExists()
             }
             PlatformInfo.OS.MACOS -> {
-                false
+                BlackHoleManager.isInstalled()
             }
             else -> false
         }
@@ -49,9 +50,17 @@ object VBCableManager {
             PlatformInfo.OS.WINDOWS -> installWindowsVBCable()
             PlatformInfo.OS.LINUX -> installLinuxVirtualDevice()
             PlatformInfo.OS.MACOS -> {
-                _installProgress.value = "macOS平台暂不支持自动安装虚拟设备，请手动安装BlackHole等虚拟音频驱动"
-                delay(3000)
-                _installProgress.value = null
+                if (BlackHoleManager.isInstalled()) {
+                    _installProgress.value = "BlackHole 已安装，请在系统设置中配置"
+                    delay(2000)
+                    _installProgress.value = null
+                } else {
+                    _installProgress.value = "请手动安装 BlackHole 虚拟音频驱动"
+                    delay(3000)
+                    _installProgress.value = "安装说明: existential.audio/blackhole/"
+                    delay(3000)
+                    _installProgress.value = null
+                }
             }
             PlatformInfo.OS.OTHER -> {
                 _installProgress.value = "当前操作系统不支持自动安装虚拟音频设备"
