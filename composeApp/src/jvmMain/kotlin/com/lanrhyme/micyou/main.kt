@@ -54,9 +54,7 @@ fun main() {
 
     if (PlatformInfo.isMacOS) {
         System.setProperty("skiko.renderApi", "METAL")
-    }
-    else
-    {
+    } else {
         System.setProperty("skiko.renderApi", "SOFTWARE_FAST")
     }
 
@@ -427,6 +425,9 @@ fun main() {
                 resizable = false
             ) {
                 WindowDraggableArea {
+                    // Apple Silicon Mac cannot use BlueCove without Rosetta 2
+                    val isBluetoothDisabled = PlatformInfo.isMacOS && PlatformInfo.isArm64
+
                     App(
                         viewModel = viewModel,
                         onMinimize = { windowState.isMinimized = true },
@@ -448,7 +449,8 @@ fun main() {
                             exitProcess(0)
                         },
                         onHideApp = { isVisible = false },
-                        onOpenSettings = { isSettingsOpen = true }
+                        onOpenSettings = { isSettingsOpen = true },
+                        isBluetoothDisabled = isBluetoothDisabled
                     )
                 }
             }
