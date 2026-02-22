@@ -22,22 +22,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Upload sources to Crowdin
-        uses: crowdin/github-action@v2
-        with:
-          upload_sources: true
-          upload_translations: false
-          download_translations: false
-        env:
-          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
-          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
-
-      - name: Download translations from Crowdin
+      - name: Sync with Crowdin
         uses: crowdin/github-action@v2
         with:
           upload_sources: true
           upload_translations: false
           download_translations: true
+          crowdin_branch_name: master
           localization_branch_name: l10n/crowdin
           create_pull_request: true
           pull_request_title: 'chore(i18n): 从Crowdin更新翻译'
