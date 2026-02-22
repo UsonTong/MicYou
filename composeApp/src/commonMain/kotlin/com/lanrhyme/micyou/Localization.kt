@@ -120,13 +120,45 @@ data class AppStrings(
     val closeActionPrompt: String = "Ask every time",
     val closeActionMinimize: String = "Minimize to Tray",
     val closeActionExit: String = "Exit Application",
+
+    // Update
     val updateTitle: String = "New Version Available",
     val updateMessage: String = "A new version (%s) is available on GitHub. Would you like to update now?",
     val updateNow: String = "Update Now",
     val updateLater: String = "Later",
     val checkUpdate: String = "Check for Updates",
     val isLatestVersion: String = "Already the latest version",
-    val checkingUpdate: String = "Checking for updates..."
+    val checkingUpdate: String = "Checking for updates...",
+
+    // BlackHole (macOS virtual audio)
+    val blackHoleInstalled: String = "BlackHole is installed, please configure in System Settings",
+    val blackHoleNotInstalled: String = "Please install BlackHole virtual audio driver manually",
+    val blackHoleInstallHint: String = "Installation guide: existential.audio/blackhole/",
+    val blackHoleConfigHint: String = "BlackHole installed, please configure in System Settings",
+    val blackHoleNotFound: String = "Cannot find BlackHole virtual input device",
+    val blackHoleSwitchSuccess: String = "Successfully switched to BlackHole",
+    val blackHoleSwitchFailed: String = "Failed to switch to BlackHole",
+    val blackHoleRestored: String = "Restored to original device",
+    val blackHoleUsingDevice: String = "Using BlackHole device: %s",
+    val blackHoleInitFailed: String = "Failed to initialize BlackHole",
+    val blackHoleFallback: String = "BlackHole not found, falling back to default device",
+    val blackHoleTrying: String = "macOS: Trying to use BlackHole virtual device",
+
+    // Install progress
+    val installOsNotSupported: String = "Auto-install not supported for current OS",
+    val installCheckingPackage: String = "Checking installer...",
+    val installDownloading: String = "Downloading VB-Cable driver...",
+    val installDownloadFailed: String = "Download failed: cannot find or download driver",
+    val installInstalling: String = "Installing VB-Cable driver...",
+    val installConfiguring: String = "Configuring...",
+    val installConfigComplete: String = "Configuration complete",
+    val installNotCompleted: String = "Installation not completed or cancelled",
+    val installError: String = "Installation error: %s",
+    val installCheckingLinux: String = "Checking Linux audio system...",
+    val installLinuxExists: String = "Virtual audio device exists, configuring...",
+    val installCreatingDevice: String = "Creating virtual audio device...",
+    val installDeviceCreated: String = "Virtual device created, configuring...",
+    val installDeviceFailed: String = "Virtual device creation failed, check system permissions and audio service"
 )
 
 val LocalAppStrings = staticCompositionLocalOf { AppStrings() }
