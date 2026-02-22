@@ -8,9 +8,8 @@ preserve_hierarchy: true
 
 files:
   - source: /composeApp/src/commonMain/composeResources/files/i18n/strings_en.json
-    translation: /composeApp/src/commonMain/composeResources/files/i18n/strings_%locale%.json
+    translation: /composeApp/src/commonMain/composeResources/files/i18n/strings_%two_letters_code%.json
     languages_mapping:
-      locale:
+      two_letters_code:
         zh-CN: zh
         zh-TW: zh_tw
-        en: en
