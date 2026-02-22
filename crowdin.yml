@@ -7,7 +7,7 @@ base_url: "https://api.crowdin.com"
 preserve_hierarchy: true
 
 files:
-  - source: /composeApp/src/commonMain/composeResources/files/i18n/strings_en.json
+  - source: /composeApp/src/commonMain/composeResources/files/i18n/strings_zh.json
     translation: /composeApp/src/commonMain/composeResources/files/i18n/strings_%locale%.json
     languages_mapping:
       locale:
