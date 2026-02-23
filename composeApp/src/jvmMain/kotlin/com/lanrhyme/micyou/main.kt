@@ -32,6 +32,7 @@ import dorkbox.systemTray.MenuItem
 import kotlinx.coroutines.runBlocking
 import micyou.composeapp.generated.resources.Res
 import micyou.composeapp.generated.resources.app_icon
+import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.painterResource
 import java.awt.Font
 import java.awt.TrayIcon
@@ -43,6 +44,7 @@ import javax.imageio.ImageIO
 import javax.swing.UIManager
 import kotlin.system.exitProcess
 
+@OptIn(ExperimentalResourceApi::class)
 fun main() {
     JvmLogger.init()
     Logger.init(JvmLogger)
@@ -124,17 +126,15 @@ fun main() {
                     Logger.w("Tray", "System tray is not supported on this platform.")
                 } else {
                     systemTrayState.value = tray
-                    
-                    val resourcePath = "composeResources/micyou.composeapp.generated.resources/drawable/app_icon.png"
-                    val stream = Thread.currentThread().contextClassLoader.getResourceAsStream(resourcePath)
-                    if (stream != null) {
-                        try {
-                            tray.setImage(stream)
-                        } catch (e: Exception) {
-                            Logger.e("Tray", "Failed to set tray image: ${e.message}")
+
+                    val image = try {
+                        runBlocking {
+                            val bytes = Res.readBytes("drawable/app_icon.png")
+                            ImageIO.read(bytes.inputStream())
                         }
-                    } else {
-                        Logger.e("Tray", "Icon resource not found at $resourcePath")
+                    } catch (e: Exception) {
+                        Logger.e("Tray", "Failed to load tray image: ${e.message}")
+                        null
                     }
                     
                     tray.status = "MicYou"
@@ -205,17 +205,14 @@ fun main() {
                 }
 
                 val tray = java.awt.SystemTray.getSystemTray()
+                // Use Compose's Res.readBytes for proper resource loading
                 val image = try {
-                    val resourcePath = "composeResources/micyou.composeapp.generated.resources/drawable/app_icon.png"
-                    val stream = Thread.currentThread().contextClassLoader.getResourceAsStream(resourcePath)
-                    if (stream != null) {
-                        ImageIO.read(stream)
-                    } else {
-                         Logger.e("Tray", "Icon resource not found at $resourcePath")
-                         null
+                    runBlocking {
+                        val bytes = Res.readBytes("drawable/app_icon.png")
+                        ImageIO.read(bytes.inputStream())
                     }
                 } catch (e: Exception) {
-                    Logger.e("Tray", "Failed to load icon: ${e.message}")
+                    Logger.e("Tray", "Failed to load tray image: ${e.message}")
                     null
                 }
 
