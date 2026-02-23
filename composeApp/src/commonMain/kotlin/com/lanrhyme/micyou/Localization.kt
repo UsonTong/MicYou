@@ -12,6 +12,7 @@ enum class AppLanguage(val label: String, val code: String) {
     Cantonese("粤语", "zh-HK"),
     English("English", "en"),
     ChineseCat("中文（猫猫语）🐱", "cat"),
+    ChineseHard("中国人（坚硬）", "zh_hard"),
 }
 
 @Serializable
@@ -180,6 +181,7 @@ fun getStrings(language: AppLanguage): AppStrings {
         AppLanguage.Cantonese -> "zh-HK"
         AppLanguage.English -> "en"
         AppLanguage.ChineseCat -> "cat"
+        AppLanguage.ChineseHard -> "zh_hard"
         AppLanguage.System -> {
             val locale = Locale.current.toLanguageTag()
             when {
