@@ -35,7 +35,8 @@ class UpdateChecker {
             if (currentVersion == "dev") return Result.success(null)
 
             val response = client.get("https://api.github.com/repos/LanRhyme/MicYou/releases/latest") {
-                header(HttpHeaders.UserAgent, "MicYou-Client")
+                header(HttpHeaders.UserAgent, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                header(HttpHeaders.Accept, "application/vnd.github+json")
             }
             
             if (!response.status.isSuccess()) {
