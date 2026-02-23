@@ -648,7 +648,9 @@ private fun MobileMainButton(
     )
     
     Box(
+        contentAlignment = Alignment.Center,
         modifier = Modifier
+            .size(buttonSize + 32.dp)
             .graphicsLayer {
                 scaleX = pressScale * pulseScale
                 scaleY = pressScale * pulseScale
@@ -657,7 +659,7 @@ private fun MobileMainButton(
         if (isRunning || isConnecting) {
             Box(
                 modifier = Modifier
-                    .size(buttonSize + 24.dp)
+                    .size(buttonSize + 32.dp)
                     .drawBehind {
                         drawCircle(
                             brush = Brush.radialGradient(
