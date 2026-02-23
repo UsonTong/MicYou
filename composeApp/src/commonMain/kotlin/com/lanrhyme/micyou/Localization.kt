@@ -9,6 +9,7 @@ enum class AppLanguage(val label: String, val code: String) {
     System("System / 跟随系统", "system"),
     Chinese("简体中文", "zh"),
     ChineseTraditional("繁體中文", "zh-TW"),
+    Cantonese("粤语", "zh-HK"),
     English("English", "en"),
     ChineseCat("中文（猫猫语）🐱", "cat"),
 }
@@ -175,11 +176,13 @@ fun getStrings(language: AppLanguage): AppStrings {
     val langCode = when (language) {
         AppLanguage.Chinese -> "zh"
         AppLanguage.ChineseTraditional -> "zh-TW"
+        AppLanguage.Cantonese -> "zh-HK"
         AppLanguage.English -> "en"
         AppLanguage.ChineseCat -> "cat"
         AppLanguage.System -> {
             val locale = Locale.current.toLanguageTag()
             when {
+                locale.startsWith("zh-HK") -> "zh-HK"
                 locale.startsWith("zh-TW") || locale.startsWith("zh-Hant") -> "zh-TW"
                 locale.startsWith("zh") -> "zh"
                 else -> "en"
@@ -195,6 +198,7 @@ fun getStrings(language: AppLanguage): AppStrings {
 private fun loadStringsFromResources(langCode: String): AppStrings {
     return try {
         val fileName = when (langCode) {
+            "zh-HK" -> "strings_zh_hk"
             "zh-TW" -> "strings_zh_tw"
             else -> "strings_$langCode"
         }
