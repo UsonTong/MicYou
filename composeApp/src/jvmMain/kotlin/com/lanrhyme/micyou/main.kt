@@ -404,8 +404,8 @@ fun main() {
         }
 
         val windowState = rememberWindowState(
-            width = if (pocketMode) 600.dp else 1100.dp, 
-            height = if (pocketMode) 240.dp else 650.dp,
+            width = if (pocketMode) 600.dp else 600.dp,
+            height = if (pocketMode) 240.dp else 550.dp,
             position = WindowPosition(Alignment.Center)
         )
 

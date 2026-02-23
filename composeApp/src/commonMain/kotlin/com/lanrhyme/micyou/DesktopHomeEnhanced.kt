@@ -27,7 +27,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.lanrhyme.micyou.animation.EasingFunctions
 import kotlinx.coroutines.delay
 import kotlin.math.*
@@ -49,25 +51,17 @@ fun DesktopHomeEnhanced(
     val strings = LocalAppStrings.current
     
     var visible by remember { mutableStateOf(false) }
-    var cardsVisible by remember { mutableStateOf(false) }
     
     val scale by animateFloatAsState(
-        targetValue = if (visible) 1f else 0.85f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        )
+        targetValue = if (visible) 1f else 0.9f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
     )
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(400, easing = EasingFunctions.EaseOutExpo)
+        animationSpec = tween(350, easing = EasingFunctions.EaseOutExpo)
     )
     
-    LaunchedEffect(Unit) {
-        visible = true
-        delay(100)
-        cardsVisible = true
-    }
+    LaunchedEffect(Unit) { visible = true }
 
     LaunchedEffect(isBluetoothDisabled, state.mode) {
         if (isBluetoothDisabled && state.mode == ConnectionMode.Bluetooth) {
@@ -80,12 +74,9 @@ fun DesktopHomeEnhanced(
             onDismissRequest = { },
             title = { Text(strings.systemConfigTitle) },
             text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
-                    Text(state.installMessage ?: "")
+                    Text(state.installMessage ?: "", style = MaterialTheme.typography.bodyMedium)
                 }
             },
             confirmButton = {}
@@ -97,16 +88,8 @@ fun DesktopHomeEnhanced(
             onDismissRequest = { viewModel.dismissFirewallDialog() },
             title = { Text(strings.firewallTitle) },
             text = { Text(strings.firewallMessage.replace("%d", state.pendingFirewallPort?.toString() ?: "")) },
-            confirmButton = {
-                Button(onClick = { viewModel.confirmAddFirewallRule() }) {
-                    Text(strings.firewallConfirm)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissFirewallDialog() }) {
-                    Text(strings.firewallDismiss)
-                }
-            }
+            confirmButton = { Button(onClick = { viewModel.confirmAddFirewallRule() }) { Text(strings.firewallConfirm) } },
+            dismissButton = { TextButton(onClick = { viewModel.dismissFirewallDialog() }) { Text(strings.firewallDismiss) } }
         )
     }
 
@@ -114,704 +97,38 @@ fun DesktopHomeEnhanced(
         color = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
         shape = RoundedCornerShape(22.dp),
-        modifier = Modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = alpha
-            }
+        modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha }
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            AnimatedCard(
-                visible = cardsVisible,
-                delayMillis = 100,
-                modifier = Modifier.weight(1f).fillMaxHeight()
-            ) {
-                NetworkPanel(
+        Column(modifier = Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            HeaderSection(
+                platform = platform,
+                state = state,
+                onMinimize = onMinimize,
+                onClose = onClose,
+                strings = strings
+            )
+            
+            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LeftPanel(
                     state = state,
                     viewModel = viewModel,
-                    platform = platform,
+                    isBluetoothDisabled = isBluetoothDisabled,
                     strings = strings,
-                    isBluetoothDisabled = isBluetoothDisabled
+                    modifier = Modifier.weight(0.38f)
                 )
-            }
-
-            AnimatedCard(
-                visible = cardsVisible,
-                delayMillis = 200,
-                modifier = Modifier.weight(1.4f).fillMaxHeight(),
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            ) {
-                ControlPanel(
+                
+                CenterPanel(
                     state = state,
                     viewModel = viewModel,
                     audioLevel = audioLevel,
-                    strings = strings
-                )
-            }
-
-            AnimatedCard(
-                visible = cardsVisible,
-                delayMillis = 300,
-                modifier = Modifier.weight(1f).fillMaxHeight()
-            ) {
-                StatusPanel(
-                    state = state,
-                    viewModel = viewModel,
-                    onMinimize = onMinimize,
-                    onClose = onClose,
-                    onOpenSettings = onOpenSettings,
-                    strings = strings
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AnimatedCard(
-    visible: Boolean,
-    delayMillis: Int,
-    modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
-    content: @Composable () -> Unit
-) {
-    val cardAlpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(400, delayMillis, easing = EasingFunctions.EaseOutExpo)
-    )
-    val cardScale by animateFloatAsState(
-        targetValue = if (visible) 1f else 0.9f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow,
-            visibilityThreshold = 0.001f
-        )
-    )
-    val cardOffsetY by animateFloatAsState(
-        targetValue = if (visible) 0f else 30f,
-        animationSpec = tween(500, delayMillis, easing = EasingFunctions.EaseOutExpo)
-    )
-
-    Card(
-        modifier = modifier.graphicsLayer {
-            this.alpha = cardAlpha
-            this.scaleX = cardScale
-            this.scaleY = cardScale
-            translationY = cardOffsetY
-        },
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        shape = RoundedCornerShape(22.dp)
-    ) {
-        content()
-    }
-}
-
-@Composable
-private fun NetworkPanel(
-    state: AppUiState,
-    viewModel: MainViewModel,
-    platform: Platform,
-    strings: AppStrings,
-    isBluetoothDisabled: Boolean
-) {
-    var titleVisible by remember { mutableStateOf(false) }
-    var fieldsVisible by remember { mutableStateOf(false) }
-    
-    LaunchedEffect(Unit) {
-        titleVisible = true
-        delay(100)
-        fieldsVisible = true
-    }
-
-    Column(
-        modifier = Modifier.padding(16.dp).fillMaxSize(),
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            AnimatedVisibility(
-                visible = titleVisible,
-                enter = fadeIn(tween(300)) + slideInVertically(
-                    initialOffsetY = { -20 },
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-                ),
-                exit = fadeOut(tween(200))
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Rounded.Router,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                    Column {
-                        Text(
-                            "MicYou Desktop",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "Server",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-            
-            AnimatedVisibility(
-                visible = titleVisible,
-                enter = fadeIn(tween(300, 100)),
-                exit = fadeOut(tween(200))
-            ) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    strings = strings,
+                    modifier = Modifier.weight(0.62f)
                 )
             }
             
-            AnimatedVisibility(
-                visible = titleVisible,
-                enter = fadeIn(tween(300, 150)),
-                exit = fadeOut(tween(200))
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Rounded.Language,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            SelectionContainer {
-                                Text(
-                                    platform.ipAddress,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer
-                        ) {
-                            Text(
-                                "LAN",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = fieldsVisible,
-            enter = fadeIn(tween(400)) + slideInVertically(
-                initialOffsetY = { 30 },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-            ),
-            exit = fadeOut(tween(200))
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    strings.connectionModeLabel,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                
-                ConnectionModeSelector(
-                    selectedMode = state.mode,
-                    onModeSelected = { viewModel.setMode(it) },
-                    isBluetoothDisabled = isBluetoothDisabled,
-                    strings = strings
-                )
-
-                AnimatedVisibility(
-                    visible = state.mode != ConnectionMode.Bluetooth,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
-                    OutlinedTextField(
-                        value = state.port,
-                        onValueChange = { viewModel.setPort(it) },
-                        label = { Text(strings.portLabel) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ConnectionModeSelector(
-    selectedMode: ConnectionMode,
-    onModeSelected: (ConnectionMode) -> Unit,
-    isBluetoothDisabled: Boolean,
-    strings: AppStrings
-) {
-    val modes = listOfNotNull(
-        ConnectionMode.Wifi to (strings.modeWifi to Icons.Rounded.Wifi),
-        if (!isBluetoothDisabled) ConnectionMode.Bluetooth to (strings.modeBluetooth to Icons.Rounded.Bluetooth) else null,
-        ConnectionMode.Usb to (strings.modeUsb to Icons.Rounded.Usb)
-    )
-    
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            modes.forEach { (mode, info) ->
-                val (label, icon) = info
-                val isSelected = selectedMode == mode
-                
-                val bgColor by animateColorAsState(
-                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                    animationSpec = tween(200)
-                )
-                val contentColor by animateColorAsState(
-                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    animationSpec = tween(200)
-                )
-                
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = bgColor,
-                    modifier = Modifier.weight(1f).height(44.dp).clickable { onModeSelected(mode) }
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(icon, null, tint = contentColor, modifier = Modifier.size(18.dp))
-                        Text(label, style = MaterialTheme.typography.labelSmall, color = contentColor, maxLines = 1)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ControlPanel(
-    state: AppUiState,
-    viewModel: MainViewModel,
-    audioLevel: Float,
-    strings: AppStrings
-) {
-    var contentVisible by remember { mutableStateOf(false) }
-    
-    LaunchedEffect(Unit) {
-        delay(200)
-        contentVisible = true
-    }
-    
-    val isRunning = state.streamState == StreamState.Streaming
-    val isConnecting = state.streamState == StreamState.Connecting
-
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        if (isRunning) {
-            AdvancedAudioVisualizer(
-                modifier = Modifier.fillMaxSize(0.85f),
-                audioLevel = audioLevel,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-
-        if (isConnecting) {
-            ConnectingAnimation(
-                modifier = Modifier.fillMaxSize(0.85f),
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-
-        MainControlButton(
-            isRunning = isRunning,
-            isConnecting = isConnecting,
-            onClick = {
-                if (isRunning || isConnecting) viewModel.stopStream() else viewModel.startStream()
-            },
-            strings = strings,
-            visible = contentVisible
-        )
-    }
-}
-
-@Composable
-private fun AdvancedAudioVisualizer(
-    modifier: Modifier = Modifier,
-    audioLevel: Float,
-    color: Color
-) {
-    val safeAudioLevel = audioLevel.coerceIn(0f, 1f)
-    
-    val infiniteTransition = rememberInfiniteTransition(label = "AudioVisualizer")
-    val breathScale by infiniteTransition.animateFloat(
-        initialValue = 0.98f,
-        targetValue = 1.02f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = EasingFunctions.EaseInOutExpo),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "Breath"
-    )
-    val wavePhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "Wave"
-    )
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.2f,
-        targetValue = 0.5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = EasingFunctions.EaseInOutCubic),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "Glow"
-    )
-    
-    Canvas(modifier = modifier.graphicsLayer { 
-        scaleX = breathScale
-        scaleY = breathScale
-    }) {
-        val center = Offset(size.width / 2, size.height / 2)
-        val baseRadius = min(size.width, size.height) / 2
-        
-        for (i in 0..3) {
-            val waveRadius = baseRadius * (0.6f + i * 0.12f * safeAudioLevel)
-            val alpha = (0.4f - i * 0.1f) * safeAudioLevel
-            
-            drawCircle(
-                color = color.copy(alpha = alpha.coerceIn(0f, 1f)),
-                radius = waveRadius,
-                center = center,
-                style = Stroke(width = (3 - i * 0.5f).dp.toPx())
-            )
-        }
-        
-        val barCount = 36
-        for (i in 0 until barCount) {
-            val angle = (i.toFloat() / barCount) * 360f + wavePhase
-            val radians = Math.toRadians(angle.toDouble()).toFloat()
-            
-            val dynamicLevel = safeAudioLevel * (0.5f + 0.5f * sin(angle * 0.05f + wavePhase * 0.02f))
-            val barHeight = baseRadius * 0.15f * dynamicLevel
-            
-            val innerRadius = baseRadius * 0.55f
-            val startX = center.x + innerRadius * cos(radians)
-            val startY = center.y + innerRadius * sin(radians)
-            val endX = center.x + (innerRadius + barHeight) * cos(radians)
-            val endY = center.y + (innerRadius + barHeight) * sin(radians)
-            
-            drawLine(
-                color = color.copy(alpha = 0.6f * safeAudioLevel),
-                start = Offset(startX, startY),
-                end = Offset(endX, endY),
-                strokeWidth = 2.5.dp.toPx(),
-                cap = StrokeCap.Round
-            )
-        }
-        
-        val glowSteps = 8
-        for (i in 0 until glowSteps) {
-            val progress = i.toFloat() / glowSteps
-            val glowRadius = baseRadius * 0.3f * (1f + progress * 0.5f)
-            val alpha = glowAlpha * (1f - progress) * safeAudioLevel
-            
-            drawCircle(
-                color = color.copy(alpha = alpha.coerceIn(0f, 0.3f)),
-                radius = glowRadius,
-                center = center
-            )
-        }
-    }
-}
-
-@Composable
-private fun ConnectingAnimation(
-    modifier: Modifier = Modifier,
-    color: Color
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "ConnectingAnim")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "Rotation"
-    )
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = EasingFunctions.EaseInOutCubic),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "Pulse"
-    )
-    
-    Canvas(modifier = modifier.graphicsLayer { 
-        scaleX = pulse
-        scaleY = pulse
-    }) {
-        val center = Offset(size.width / 2, size.height / 2)
-        val radius = min(size.width, size.height) / 2
-        
-        for (i in 0..2) {
-            val arcAngle = rotation + i * 120f
-            val sweepAngle = 60f + 20f * sin(rotation * 0.02f)
-            
-            drawArc(
-                color = color.copy(alpha = 0.4f - i * 0.1f),
-                startAngle = arcAngle,
-                sweepAngle = sweepAngle,
-                useCenter = false,
-                topLeft = Offset(center.x - radius * (0.5f + i * 0.15f), center.y - radius * (0.5f + i * 0.15f)),
-                size = Size(radius * 2 * (0.5f + i * 0.15f), radius * 2 * (0.5f + i * 0.15f)),
-                style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-            )
-        }
-    }
-}
-
-@Composable
-private fun MainControlButton(
-    isRunning: Boolean,
-    isConnecting: Boolean,
-    onClick: () -> Unit,
-    strings: AppStrings,
-    visible: Boolean
-) {
-    val buttonSize by animateDpAsState(
-        targetValue = if (isRunning) 88.dp else 76.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-    )
-    
-    val buttonColor by animateColorAsState(
-        targetValue = when {
-            isRunning -> MaterialTheme.colorScheme.error
-            isConnecting -> MaterialTheme.colorScheme.tertiary
-            else -> MaterialTheme.colorScheme.primary
-        },
-        animationSpec = tween(400)
-    )
-    
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.88f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy)
-    )
-    
-    val buttonAlpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(400, easing = EasingFunctions.EaseOutExpo)
-    )
-    val buttonScale by animateFloatAsState(
-        targetValue = if (visible) 1f else 0.5f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-    )
-    
-    val infiniteTransition = rememberInfiniteTransition(label = "ButtonGlow")
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = EasingFunctions.EaseInOutCubic),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "Glow"
-    )
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(buttonSize + 24.dp)
-                .graphicsLayer {
-                    this.alpha = buttonAlpha
-                    scaleX = buttonScale * pressScale
-                    scaleY = buttonScale * pressScale
-                }
-        ) {
-            if (isRunning) {
-                Canvas(modifier = Modifier.size(buttonSize + 20.dp)) {
-                    drawCircle(
-                        color = buttonColor.copy(alpha = glowAlpha * 0.3f),
-                        radius = size.width / 2
-                    )
-                }
-            }
-            
-            FloatingActionButton(
-                onClick = onClick,
-                interactionSource = interactionSource,
-                containerColor = buttonColor,
-                modifier = Modifier.size(buttonSize),
-                shape = CircleShape,
-                elevation = FloatingActionButtonDefaults.elevation(
-                    defaultElevation = if (isPressed) 2.dp else 8.dp,
-                    pressedElevation = 2.dp
-                )
-            ) {
-                Icon(
-                    if (isConnecting) Icons.Rounded.Refresh else if (isRunning) Icons.Rounded.Stop else Icons.Rounded.PlayArrow,
-                    contentDescription = if (isRunning) strings.stop else strings.start,
-                    modifier = Modifier.size(36.dp),
-                    tint = Color.White
-                )
-            }
-        }
-        
-        AnimatedVisibility(visible = visible, enter = fadeIn(tween(300, 200))) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = when {
-                        isRunning -> strings.statusStreaming
-                        isConnecting -> strings.statusConnecting
-                        else -> strings.clickToStart
-                    },
-                    style = MaterialTheme.typography.labelLarge,
-                    color = buttonColor
-                )
-                if (isRunning) {
-                    Spacer(Modifier.height(4.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = buttonColor
-                    ) {
-                        Text(
-                            "LIVE",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusPanel(
-    state: AppUiState,
-    viewModel: MainViewModel,
-    onMinimize: () -> Unit,
-    onClose: () -> Unit,
-    onOpenSettings: () -> Unit,
-    strings: AppStrings
-) {
-    var contentVisible by remember { mutableStateOf(false) }
-    
-    LaunchedEffect(Unit) {
-        delay(300)
-        contentVisible = true
-    }
-
-    Column(
-        modifier = Modifier.padding(12.dp).fillMaxSize(),
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
-        AnimatedVisibility(
-            visible = contentVisible,
-            enter = fadeIn(tween(300)) + slideInVertically(
-                initialOffsetY = { -20 },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-            ),
-            exit = fadeOut(tween(200))
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                IconButton(onClick = onMinimize, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Rounded.Minimize, strings.minimize, modifier = Modifier.size(18.dp))
-                }
-                IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        Icons.Rounded.Close,
-                        strings.close,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = contentVisible,
-            enter = fadeIn(tween(400, 100)) + scaleIn(
-                initialScale = 0.8f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-            ),
-            exit = fadeOut(tween(200))
-        ) {
-            StatusDisplay(
-                streamState = state.streamState,
-                errorMessage = state.errorMessage,
-                strings = strings
-            )
-        }
-
-        AnimatedVisibility(
-            visible = contentVisible,
-            enter = fadeIn(tween(400, 200)) + slideInVertically(
-                initialOffsetY = { 20 },
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-            ),
-            exit = fadeOut(tween(200))
-        ) {
-            QuickActions(
-                isMuted = state.isMuted,
-                onToggleMute = { viewModel.toggleMute() },
+            BottomBar(
+                state = state,
+                viewModel = viewModel,
                 onOpenSettings = onOpenSettings,
                 strings = strings
             )
@@ -820,10 +137,187 @@ private fun StatusPanel(
 }
 
 @Composable
-private fun StatusDisplay(
+private fun HeaderSection(
+    platform: Platform,
+    state: AppUiState,
+    onMinimize: () -> Unit,
+    onClose: () -> Unit,
+    strings: AppStrings
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Router, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    }
+                }
+                Column {
+                    Text("MicYou Desktop", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text("Server", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Rounded.Language, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                    SelectionContainer {
+                        Text(platform.ipAddress, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+            
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                IconButton(onClick = onMinimize, modifier = Modifier.size(30.dp)) {
+                    Icon(Icons.Rounded.Minimize, null, modifier = Modifier.size(16.dp))
+                }
+                IconButton(onClick = onClose, modifier = Modifier.size(30.dp)) {
+                    Icon(Icons.Rounded.Close, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LeftPanel(
+    state: AppUiState,
+    viewModel: MainViewModel,
+    isBluetoothDisabled: Boolean,
+    strings: AppStrings,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        ModeCard(
+            selectedMode = state.mode,
+            onModeSelected = { viewModel.setMode(it) },
+            isBluetoothDisabled = isBluetoothDisabled,
+            strings = strings
+        )
+        
+        if (state.mode != ConnectionMode.Bluetooth) {
+            PortCard(
+                port = state.port,
+                onPortChange = { viewModel.setPort(it) },
+                strings = strings
+            )
+        }
+        
+        StatusCard(
+            streamState = state.streamState,
+            errorMessage = state.errorMessage,
+            strings = strings,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun ModeCard(
+    selectedMode: ConnectionMode,
+    onModeSelected: (ConnectionMode) -> Unit,
+    isBluetoothDisabled: Boolean,
+    strings: AppStrings
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(strings.connectionModeLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            
+            val modes = listOfNotNull(
+                ConnectionMode.Wifi to (strings.modeWifi to Icons.Rounded.Wifi),
+                if (!isBluetoothDisabled) ConnectionMode.Bluetooth to (strings.modeBluetooth to Icons.Rounded.Bluetooth) else null,
+                ConnectionMode.Usb to (strings.modeUsb to Icons.Rounded.Usb)
+            )
+            
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                modes.forEach { (mode, info) ->
+                    val (label, icon) = info
+                    val isSelected = selectedMode == mode
+                    
+                    val bgColor by animateColorAsState(
+                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                        animationSpec = tween(200)
+                    )
+                    val contentColor by animateColorAsState(
+                        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        animationSpec = tween(200)
+                    )
+                    
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = bgColor,
+                        modifier = Modifier.weight(1f).height(42.dp).clickable { onModeSelected(mode) }
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(icon, null, tint = contentColor, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.height(2.dp))
+                            Text(label, style = MaterialTheme.typography.labelSmall, color = contentColor, maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PortCard(
+    port: String,
+    onPortChange: (String) -> Unit,
+    strings: AppStrings
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(strings.portLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedTextField(
+                value = port,
+                onValueChange = onPortChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(10.dp),
+                textStyle = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusCard(
     streamState: StreamState,
     errorMessage: String?,
-    strings: AppStrings
+    strings: AppStrings,
+    modifier: Modifier = Modifier
 ) {
     val statusColor by animateColorAsState(
         targetValue = when (streamState) {
@@ -835,60 +329,62 @@ private fun StatusDisplay(
         animationSpec = tween(300)
     )
     
-    val statusIcon = when (streamState) {
-        StreamState.Idle -> Icons.Rounded.Info
-        StreamState.Connecting -> Icons.Rounded.HourglassTop
-        StreamState.Streaming -> Icons.Rounded.CheckCircle
-        StreamState.Error -> Icons.Rounded.Error
-    }
-    
-    val statusText = when (streamState) {
-        StreamState.Idle -> strings.statusIdle
-        StreamState.Connecting -> strings.statusConnecting
-        StreamState.Streaming -> strings.statusStreaming
-        StreamState.Error -> strings.statusError
-    }
-    
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = modifier.fillMaxWidth()
     ) {
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = statusColor.copy(alpha = 0.1f),
-            modifier = Modifier.size(56.dp)
+        Column(
+            modifier = Modifier.fillMaxSize().padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(statusIcon, null, tint = statusColor, modifier = Modifier.size(28.dp))
-            }
-        }
-        
-        Text(
-            statusText,
-            style = MaterialTheme.typography.titleSmall,
-            color = statusColor,
-            fontWeight = FontWeight.SemiBold
-        )
-        
-        AnimatedVisibility(
-            visible = errorMessage != null,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            if (errorMessage != null) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                ) {
-                    Text(
-                        errorMessage,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(8.dp),
-                        maxLines = 3,
-                        textAlign = TextAlign.Center
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = statusColor.copy(alpha = 0.12f),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        when (streamState) {
+                            StreamState.Idle -> Icons.Rounded.Info
+                            StreamState.Connecting -> Icons.Rounded.HourglassTop
+                            StreamState.Streaming -> Icons.Rounded.CheckCircle
+                            StreamState.Error -> Icons.Rounded.Error
+                        },
+                        null, tint = statusColor, modifier = Modifier.size(24.dp)
                     )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                when (streamState) {
+                    StreamState.Idle -> strings.statusIdle
+                    StreamState.Connecting -> strings.statusConnecting
+                    StreamState.Streaming -> strings.statusStreaming
+                    StreamState.Error -> strings.statusError
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = statusColor,
+                fontWeight = FontWeight.SemiBold
+            )
+            
+            AnimatedVisibility(visible = errorMessage != null, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                if (errorMessage != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                    ) {
+                        Text(
+                            errorMessage,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(8.dp),
+                            maxLines = 3,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
         }
@@ -896,52 +392,288 @@ private fun StatusDisplay(
 }
 
 @Composable
-private fun QuickActions(
-    isMuted: Boolean,
-    onToggleMute: () -> Unit,
+private fun CenterPanel(
+    state: AppUiState,
+    viewModel: MainViewModel,
+    audioLevel: Float,
+    strings: AppStrings,
+    modifier: Modifier = Modifier
+) {
+    val isRunning = state.streamState == StreamState.Streaming
+    val isConnecting = state.streamState == StreamState.Connecting
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+        modifier = modifier.fillMaxHeight()
+    ) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (isRunning) {
+                AudioVisualizer(
+                    modifier = Modifier.fillMaxSize(0.88f),
+                    audioLevel = audioLevel,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            
+            if (isConnecting) {
+                ConnectingAnimation(
+                    modifier = Modifier.fillMaxSize(0.88f),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            
+            MainControlButton(
+                isRunning = isRunning,
+                isConnecting = isConnecting,
+                onClick = { if (isRunning || isConnecting) viewModel.stopStream() else viewModel.startStream() },
+                strings = strings
+            )
+        }
+    }
+}
+
+@Composable
+private fun AudioVisualizer(
+    modifier: Modifier = Modifier,
+    audioLevel: Float,
+    color: Color
+) {
+    val safeAudioLevel = audioLevel.coerceIn(0f, 1f)
+    
+    val infiniteTransition = rememberInfiniteTransition(label = "AudioViz")
+    val breathScale by infiniteTransition.animateFloat(
+        initialValue = 0.98f, targetValue = 1.02f,
+        animationSpec = infiniteRepeatable(tween(1500, easing = EasingFunctions.EaseInOutExpo), RepeatMode.Reverse),
+        label = "Breath"
+    )
+    val wavePhase by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(3000, easing = LinearEasing), RepeatMode.Restart),
+        label = "Wave"
+    )
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.2f, targetValue = 0.5f,
+        animationSpec = infiniteRepeatable(tween(2000, easing = EasingFunctions.EaseInOutCubic), RepeatMode.Reverse),
+        label = "Glow"
+    )
+    
+    Canvas(modifier = modifier.graphicsLayer { scaleX = breathScale; scaleY = breathScale }) {
+        val center = Offset(size.width / 2, size.height / 2)
+        val baseRadius = min(size.width, size.height) / 2
+        
+        for (i in 0..3) {
+            val waveRadius = baseRadius * (0.55f + i * 0.12f * safeAudioLevel)
+            val alpha = (0.35f - i * 0.08f) * safeAudioLevel
+            drawCircle(
+                color = color.copy(alpha = alpha.coerceIn(0f, 1f)),
+                radius = waveRadius, center = center,
+                style = Stroke(width = (2.5f - i * 0.4f).dp.toPx())
+            )
+        }
+        
+        val barCount = 32
+        for (i in 0 until barCount) {
+            val angle = (i.toFloat() / barCount) * 360f + wavePhase
+            val radians = Math.toRadians(angle.toDouble()).toFloat()
+            val dynamicLevel = safeAudioLevel * (0.5f + 0.5f * sin(angle * 0.05f + wavePhase * 0.02f))
+            val barHeight = baseRadius * 0.12f * dynamicLevel
+            val innerRadius = baseRadius * 0.5f
+            
+            drawLine(
+                color = color.copy(alpha = 0.5f * safeAudioLevel),
+                start = Offset(center.x + innerRadius * cos(radians), center.y + innerRadius * sin(radians)),
+                end = Offset(center.x + (innerRadius + barHeight) * cos(radians), center.y + (innerRadius + barHeight) * sin(radians)),
+                strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round
+            )
+        }
+        
+        repeat(6) { i ->
+            val progress = i.toFloat() / 6
+            val glowRadius = baseRadius * 0.25f * (1f + progress * 0.5f)
+            val alpha = glowAlpha * (1f - progress) * safeAudioLevel
+            drawCircle(color.copy(alpha = alpha.coerceIn(0f, 0.25f)), glowRadius, center)
+        }
+    }
+}
+
+@Composable
+private fun ConnectingAnimation(
+    modifier: Modifier = Modifier,
+    color: Color
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "ConnAnim")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Restart),
+        label = "Rot"
+    )
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 0.92f, targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(tween(1000, easing = EasingFunctions.EaseInOutCubic), RepeatMode.Reverse),
+        label = "Pulse"
+    )
+    
+    Canvas(modifier = modifier.graphicsLayer { scaleX = pulse; scaleY = pulse }) {
+        val center = Offset(size.width / 2, size.height / 2)
+        val radius = min(size.width, size.height) / 2
+        
+        for (i in 0..2) {
+            val arcAngle = rotation + i * 120f
+            val sweepAngle = 60f + 20f * sin(rotation * 0.02f)
+            drawArc(
+                color.copy(alpha = 0.35f - i * 0.1f),
+                startAngle = arcAngle, sweepAngle = sweepAngle, useCenter = false,
+                topLeft = Offset(center.x - radius * (0.45f + i * 0.12f), center.y - radius * (0.45f + i * 0.12f)),
+                size = Size(radius * 2 * (0.45f + i * 0.12f), radius * 2 * (0.45f + i * 0.12f)),
+                style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MainControlButton(
+    isRunning: Boolean,
+    isConnecting: Boolean,
+    onClick: () -> Unit,
+    strings: AppStrings
+) {
+    val buttonSize by animateDpAsState(
+        targetValue = if (isRunning) 72.dp else 64.dp,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+    )
+    
+    val buttonColor by animateColorAsState(
+        targetValue = when {
+            isRunning -> MaterialTheme.colorScheme.error
+            isConnecting -> MaterialTheme.colorScheme.tertiary
+            else -> MaterialTheme.colorScheme.primary
+        },
+        animationSpec = tween(350)
+    )
+    
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy)
+    )
+    
+    val infiniteTransition = rememberInfiniteTransition(label = "BtnGlow")
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.25f, targetValue = 0.55f,
+        animationSpec = infiniteRepeatable(tween(1500, easing = EasingFunctions.EaseInOutCubic), RepeatMode.Reverse),
+        label = "Glow"
+    )
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(buttonSize + 16.dp).graphicsLayer { scaleX = pressScale; scaleY = pressScale }) {
+            if (isRunning) {
+                Canvas(modifier = Modifier.size(buttonSize + 14.dp)) {
+                    drawCircle(buttonColor.copy(alpha = glowAlpha * 0.35f), size.width / 2)
+                }
+            }
+            
+            FloatingActionButton(
+                onClick = onClick,
+                interactionSource = interactionSource,
+                containerColor = buttonColor,
+                modifier = Modifier.size(buttonSize),
+                shape = CircleShape,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = if (isPressed) 2.dp else 6.dp)
+            ) {
+                Icon(
+                    if (isConnecting) Icons.Rounded.Refresh else if (isRunning) Icons.Rounded.Stop else Icons.Rounded.PlayArrow,
+                    null, modifier = Modifier.size(28.dp), tint = Color.White
+                )
+            }
+        }
+        
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                when { isRunning -> strings.statusStreaming; isConnecting -> strings.statusConnecting; else -> strings.clickToStart },
+                style = MaterialTheme.typography.labelMedium, color = buttonColor, fontWeight = FontWeight.Medium
+            )
+            if (isRunning) {
+                Surface(shape = RoundedCornerShape(3.dp), color = buttonColor) {
+                    Text("LIVE", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottomBar(
+    state: AppUiState,
+    viewModel: MainViewModel,
     onOpenSettings: () -> Unit,
     strings: AppStrings
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        val muteInteractionSource = remember { MutableInteractionSource() }
-        val isMutePressed by muteInteractionSource.collectIsPressedAsState()
-        val muteScale by animateFloatAsState(
-            targetValue = if (isMutePressed) 0.85f else 1f,
-            animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy)
-        )
-        
-        val muteColor by animateColorAsState(
-            targetValue = if (isMuted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-            animationSpec = tween(300)
-        )
-
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            IconButton(
-                onClick = onToggleMute,
-                interactionSource = muteInteractionSource,
-                modifier = Modifier.size(40.dp).scale(muteScale)
-            ) {
-                Icon(
-                    if (isMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
-                    contentDescription = if (isMuted) strings.unmuteLabel else strings.muteLabel,
-                    modifier = Modifier.size(20.dp),
-                    tint = muteColor
-                )
+            MuteButton(
+                isMuted = state.isMuted,
+                onToggle = { viewModel.toggleMute() },
+                strings = strings
+            )
+            
+            IconButton(onClick = onOpenSettings, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Rounded.Settings, strings.settingsTitle, modifier = Modifier.size(18.dp))
             }
+        }
+    }
+}
 
-            IconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(Icons.Rounded.Settings, strings.settingsTitle, modifier = Modifier.size(20.dp))
-            }
+@Composable
+private fun MuteButton(
+    isMuted: Boolean,
+    onToggle: () -> Unit,
+    strings: AppStrings
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy)
+    )
+    
+    val bgColor by animateColorAsState(
+        targetValue = if (isMuted) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+        animationSpec = tween(200)
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isMuted) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = tween(200)
+    )
+    
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = bgColor,
+        modifier = Modifier.scale(scale).clickable(interactionSource, null) { onToggle() }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                if (isMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
+                null, tint = contentColor, modifier = Modifier.size(16.dp)
+            )
+            Text(
+                if (isMuted) strings.muteLabel else strings.unmuteLabel,
+                style = MaterialTheme.typography.labelSmall, color = contentColor
+            )
         }
     }
 }
