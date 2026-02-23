@@ -116,8 +116,8 @@ object VirtualAudioDevice {
         return try {
             val process = ProcessBuilder(
                 "pw-loopback",
-                "--capture-props=target.object=$SINK_NAME",
-                "--playback-props=node.name=$SOURCE_NAME media.class=Audio/Source/Virtual"
+                "--capture-props={\"node.target\": \"$SINK_NAME\", \"media.class\": \"Stream/Input/Audio\", \"stream.capture.sink\": true}",
+                "--playback-props={\"node.description\": \"$SOURCE_NAME\", \"media.class\": \"Audio/Source\"}"
             ).redirectErrorStream(true).start()
             
             loopbackProcess = process
