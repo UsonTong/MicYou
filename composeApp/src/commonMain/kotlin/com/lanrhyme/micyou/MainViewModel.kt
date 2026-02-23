@@ -72,7 +72,8 @@ data class AppUiState(
     val closeAction: CloseAction = CloseAction.Prompt,
     val showCloseConfirmDialog: Boolean = false,
     val rememberCloseAction: Boolean = false,
-    val newVersionAvailable: GitHubRelease? = null
+    val newVersionAvailable: GitHubRelease? = null,
+    val pocketMode: Boolean = true
 )
 
 enum class CloseAction(val label: String) {
@@ -148,6 +149,7 @@ class MainViewModel : ViewModel() {
         } catch (e: Exception) {
             CloseAction.Prompt
         }
+        val savedPocketMode = settings.getBoolean("pocket_mode", true)
 
         _uiState.update { 
             it.copy(
@@ -176,7 +178,8 @@ class MainViewModel : ViewModel() {
                 bluetoothAddress = savedBluetoothAddress,
                 isAutoConfig = savedIsAutoConfig,
                 minimizeToTray = savedMinimizeToTray,
-                closeAction = savedCloseAction
+                closeAction = savedCloseAction,
+                pocketMode = savedPocketMode
             ) 
         }
         
@@ -301,6 +304,11 @@ class MainViewModel : ViewModel() {
 
     fun setRememberCloseAction(remember: Boolean) {
         _uiState.update { it.copy(rememberCloseAction = remember) }
+    }
+
+    fun setPocketMode(enabled: Boolean) {
+        _uiState.update { it.copy(pocketMode = enabled) }
+        settings.putBoolean("pocket_mode", enabled)
     }
 
     fun handleCloseRequest(onExit: () -> Unit, onHide: () -> Unit) {
