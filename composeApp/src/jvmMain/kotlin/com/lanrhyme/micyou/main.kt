@@ -495,5 +495,74 @@ fun main() {
                 }
             }
         }
+
+        val showCloseConfirmDialog by viewModel.uiState.collectAsState().let { state ->
+            derivedStateOf { state.value.showCloseConfirmDialog }
+        }
+
+        if (showCloseConfirmDialog) {
+            val closeConfirmState = rememberWindowState(
+                width = 500.dp,
+                height = 250.dp,
+                position = WindowPosition(Alignment.Center)
+            )
+
+            Window(
+                onCloseRequest = { viewModel.setShowCloseConfirmDialog(false) },
+                state = closeConfirmState,
+                title = strings.closeConfirmTitle,
+                icon = icon,
+                undecorated = true,
+                transparent = true,
+                resizable = false
+            ) {
+                val themeMode by viewModel.uiState.collectAsState().let { state ->
+                    derivedStateOf { state.value.themeMode }
+                }
+                val seedColor by viewModel.uiState.collectAsState().let { state ->
+                    derivedStateOf { state.value.seedColor }
+                }
+                val rememberCloseAction by viewModel.uiState.collectAsState().let { state ->
+                    derivedStateOf { state.value.rememberCloseAction }
+                }
+                val seedColorObj = androidx.compose.ui.graphics.Color(seedColor.toInt())
+
+                CompositionLocalProvider(LocalAppStrings provides strings) {
+                    AppTheme(themeMode = themeMode, seedColor = seedColorObj) {
+                        CloseConfirmDialog(
+                            onDismiss = { viewModel.setShowCloseConfirmDialog(false) },
+                            onMinimize = {
+                                viewModel.confirmCloseAction(
+                                    CloseAction.Minimize,
+                                    rememberCloseAction,
+                                    onExit = {
+                                        runBlocking {
+                                            VBCableManager.setSystemDefaultMicrophone(toCable = false)
+                                        }
+                                        exitProcess(0)
+                                    },
+                                    onHide = { isVisible = false }
+                                )
+                            },
+                            onExit = {
+                                viewModel.confirmCloseAction(
+                                    CloseAction.Exit,
+                                    rememberCloseAction,
+                                    onExit = {
+                                        runBlocking {
+                                            VBCableManager.setSystemDefaultMicrophone(toCable = false)
+                                        }
+                                        exitProcess(0)
+                                    },
+                                    onHide = { isVisible = false }
+                                )
+                            },
+                            rememberCloseAction = rememberCloseAction,
+                            onRememberChange = { viewModel.setRememberCloseAction(it) }
+                        )
+                    }
+                }
+            }
+        }
     }
 }

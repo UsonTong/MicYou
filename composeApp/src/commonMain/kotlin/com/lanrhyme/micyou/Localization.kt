@@ -118,6 +118,7 @@ data class AppStrings(
     val closeConfirmMinimize: String = "Minimize to Tray",
     val closeConfirmExit: String = "Exit Application",
     val closeConfirmRemember: String = "Don't ask again",
+    val closeConfirmCancel: String = "Cancel",
     val closeActionLabel: String = "Close Button Action",
     val closeActionPrompt: String = "Ask every time",
     val closeActionMinimize: String = "Minimize to Tray",

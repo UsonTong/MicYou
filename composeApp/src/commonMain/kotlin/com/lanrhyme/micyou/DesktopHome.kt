@@ -41,7 +41,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -144,48 +143,6 @@ fun DesktopHome(
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissFirewallDialog() }) {
                     Text(strings.firewallDismiss)
-                }
-            }
-        )
-    }
-
-    if (state.showCloseConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.setShowCloseConfirmDialog(false) },
-            title = { Text(strings.closeConfirmTitle) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(strings.closeConfirmMessage)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { 
-                            viewModel.setRememberCloseAction(!state.rememberCloseAction) 
-                        }
-                    ) {
-                        Checkbox(
-                            checked = state.rememberCloseAction,
-                            onCheckedChange = { viewModel.setRememberCloseAction(it) },
-                            interactionSource = remember { MutableInteractionSource() }
-                        )
-                        Text(strings.closeConfirmRemember, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    viewModel.confirmCloseAction(CloseAction.Minimize, state.rememberCloseAction, onExit = onExitApp, onHide = onHideApp)
-                }) {
-                    Text(strings.closeConfirmMinimize)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    viewModel.confirmCloseAction(CloseAction.Exit, state.rememberCloseAction, onExit = onExitApp, onHide = onHideApp)
-                }) {
-                    Text(strings.closeConfirmExit)
                 }
             }
         )
