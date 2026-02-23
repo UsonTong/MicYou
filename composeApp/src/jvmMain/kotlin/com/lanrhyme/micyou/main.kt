@@ -420,8 +420,8 @@ fun main() {
                 state = windowState,
                 title = strings.appName,
                 icon = icon,
-                undecorated = true,
-                transparent = true,
+                undecorated = false,
+                transparent = false,
                 resizable = false
             ) {
                 WindowDraggableArea {

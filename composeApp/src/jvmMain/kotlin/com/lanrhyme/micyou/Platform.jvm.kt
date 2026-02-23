@@ -62,11 +62,8 @@ actual fun uninstallVBCable() {
 }
 
 actual fun getAppVersion(): String {
-    val fromManifest = object {}.javaClass.`package`?.implementationVersion
-    if (!fromManifest.isNullOrBlank()) return fromManifest
-    val fromProperty = System.getProperty("app.version")
-    if (!fromProperty.isNullOrBlank()) return fromProperty
-    return "dev"
+    // 临时硬编码为旧版本以便测试更新逻辑
+    return "1.0.0"
 }
 
 actual fun openUrl(url: String) {
