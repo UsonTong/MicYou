@@ -223,9 +223,11 @@ class MainViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            val release = updateChecker.checkUpdate()
-            if (release != null) {
-                _uiState.update { it.copy(newVersionAvailable = release) }
+            val result = updateChecker.checkUpdate()
+            result.onSuccess { release ->
+                if (release != null) {
+                    _uiState.update { it.copy(newVersionAvailable = release) }
+                }
             }
         }
     }
@@ -238,11 +240,16 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             val strings = getStrings(_uiState.value.language)
             _uiState.update { it.copy(snackbarMessage = strings.checkingUpdate) }
-            val release = updateChecker.checkUpdate()
-            if (release != null) {
-                _uiState.update { it.copy(newVersionAvailable = release) }
-            } else {
-                _uiState.update { it.copy(snackbarMessage = strings.isLatestVersion) }
+            val result = updateChecker.checkUpdate()
+            
+            result.onSuccess { release ->
+                if (release != null) {
+                    _uiState.update { it.copy(newVersionAvailable = release, snackbarMessage = null) }
+                } else {
+                    _uiState.update { it.copy(snackbarMessage = strings.isLatestVersion) }
+                }
+            }.onFailure { e ->
+                _uiState.update { it.copy(snackbarMessage = "检查更新失败: ${e.message}") }
             }
         }
     }

@@ -4,6 +4,9 @@ import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.HttpHeaders
+import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -26,22 +29,31 @@ class UpdateChecker {
         }
     }
 
-    suspend fun checkUpdate(): GitHubRelease? {
+    suspend fun checkUpdate(): Result<GitHubRelease?> {
         return try {
             val currentVersion = getAppVersion()
-            if (currentVersion == "dev") return null
+            if (currentVersion == "dev") return Result.success(null)
 
-            val latestRelease: GitHubRelease = client.get("https://api.github.com/repos/LanRhyme/MicYou/releases/latest").body()
+            val response = client.get("https://api.github.com/repos/LanRhyme/MicYou/releases/latest") {
+                header(HttpHeaders.UserAgent, "MicYou-Client")
+            }
             
+            if (!response.status.isSuccess()) {
+                val errorMsg = "HTTP Error: ${response.status.value}"
+                Logger.e("UpdateChecker", errorMsg)
+                return Result.failure(Exception(errorMsg))
+            }
+
+            val latestRelease: GitHubRelease = response.body()
             val latestVersion = latestRelease.tagName.removePrefix("v")
             if (isNewerVersion(currentVersion, latestVersion)) {
-                latestRelease
+                Result.success(latestRelease)
             } else {
-                null
+                Result.success(null)
             }
         } catch (e: Exception) {
             Logger.e("UpdateChecker", "Failed to check for updates", e)
-            null
+            Result.failure(e)
         }
     }
 
