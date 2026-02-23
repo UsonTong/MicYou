@@ -8,6 +8,12 @@
   <a href="./README_ZH.md">简体中文</a> | <a href="./README_TW.md">繁體中文</a> | <b>English</b>
 </p>
 
+<div style="text-align: center;">
+  <a href="https://crowdin.com/project/micyou" target="_blank" rel="noopener noreferrer">
+    <img src="https://badges.crowdin.net/micyou/localized.svg" alt="Crowdin">
+  </a>
+</div>
+
 MicYou is a powerful tool that turns your Android device into a high-quality wireless microphone for your PC. Built with Kotlin Multiplatform and Jetpack Compose/Material 3.
 
 Based on the [AndroidMic](https://github.com/teamclouday/AndroidMic) project.
