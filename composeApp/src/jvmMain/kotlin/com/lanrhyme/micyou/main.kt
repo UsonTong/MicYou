@@ -13,6 +13,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -398,11 +399,22 @@ fun main() {
             }
         }
 
+        val pocketMode by viewModel.uiState.collectAsState().let { state ->
+            derivedStateOf { state.value.pocketMode }
+        }
+
         val windowState = rememberWindowState(
-            width = 600.dp, 
-            height = 240.dp,
+            width = if (pocketMode) 600.dp else 600.dp,
+            height = if (pocketMode) 240.dp else 550.dp,
             position = WindowPosition(Alignment.Center)
         )
+
+        LaunchedEffect(pocketMode) {
+            windowState.size = androidx.compose.ui.unit.DpSize(
+                if (pocketMode) 600.dp else 1100.dp,
+                if (pocketMode) 240.dp else 650.dp
+            )
+        }
 
         if (isVisible) {
             Window(
