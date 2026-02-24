@@ -49,17 +49,17 @@ class UpdateChecker {
             
             if (apiResponse.status == HttpStatusCode.Forbidden || apiResponse.status == HttpStatusCode.TooManyRequests) {
                 Logger.w("UpdateChecker", "GitHub API rate limited, trying website fallback...")
-                return checkUpdateViaWebsite(currentVersion)
+                return checkUpdateViaWebsite(currentVersion, "New version released")
             }
 
             Result.failure(Exception("HTTP Error: ${apiResponse.status.value}"))
         } catch (e: Exception) {
             Logger.e("UpdateChecker", "API check failed, trying fallback...", e)
-            return checkUpdateViaWebsite(currentVersion)
+            return checkUpdateViaWebsite(currentVersion, "New version released")
         }
     }
 
-    private suspend fun checkUpdateViaWebsite(currentVersion: String): Result<GitHubRelease?> {
+    private suspend fun checkUpdateViaWebsite(currentVersion: String, releaseBody: String): Result<GitHubRelease?> {
         return try {
             val response = client.get("https://github.com/LanRhyme/MicYou/releases/latest") {
                 header(HttpHeaders.UserAgent, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
@@ -75,7 +75,7 @@ class UpdateChecker {
                     return Result.success(GitHubRelease(
                         tagName = tag,
                         htmlUrl = finalUrl,
-                        body = "新版本已发布"
+                        body = releaseBody
                     ))
                 }
             }

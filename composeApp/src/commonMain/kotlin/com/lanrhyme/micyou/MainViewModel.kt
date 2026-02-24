@@ -252,7 +252,7 @@ class MainViewModel : ViewModel() {
                     _uiState.update { it.copy(snackbarMessage = strings.isLatestVersion) }
                 }
             }.onFailure { e ->
-                _uiState.update { it.copy(snackbarMessage = "检查更新失败: ${e.message}") }
+                _uiState.update { it.copy(snackbarMessage = strings.updateCheckFailed.format(e.message)) }
             }
         }
     }
