@@ -466,8 +466,6 @@ namespace AudioSwitcher {
                                 
                                 try {
                                     IPolicyConfig policyConfig = new PolicyConfigClient() as IPolicyConfig;
-                                    policyConfig.SetDefaultEndpoint(id, 0);
-                                    policyConfig.SetDefaultEndpoint(id, 1);
                                     policyConfig.SetDefaultEndpoint(id, 2);
                                     Console.WriteLine("Set as default successfully.");
                                 } catch (Exception ex) {
