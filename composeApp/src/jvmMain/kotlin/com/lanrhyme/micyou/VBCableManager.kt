@@ -469,7 +469,7 @@ namespace AudioSwitcher {
                                     policyConfig.SetDefaultEndpoint(id, 2);
                                     Console.WriteLine("Set as default successfully.");
                                 } catch (Exception ex) {
-                                    Console.WriteLine("Error setting default endpoint: " + ex.Message)
+                                    Console.WriteLine("Error setting default endpoint: " + ex.Message);
                                 }
                                 return;
                             }
