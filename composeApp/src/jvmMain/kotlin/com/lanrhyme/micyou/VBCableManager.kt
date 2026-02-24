@@ -16,11 +16,18 @@ object VBCableManager {
     private const val CABLE_OUTPUT_NAME = "CABLE Output"
     private const val CABLE_INPUT_NAME = "CABLE Input"
     private const val INSTALLER_NAME = "VBCABLE_Setup_x64.exe"
+    private const val KEY_CONFIGURED = "vbcable_configured"
 
     private val _installProgress = MutableStateFlow<String?>(null)
     val installProgress = _installProgress.asStateFlow()
 
     private val settings = SettingsFactory.getSettings()
+    
+    private var initialized = false
+    
+    init {
+        initialized = settings.getBoolean(KEY_CONFIGURED, false)
+    }
     
     private val savedLanguageName: String
         get() = settings.getString("language", AppLanguage.System.name)
@@ -51,9 +58,16 @@ object VBCableManager {
     }
 
     suspend fun installVBCable() = withContext(Dispatchers.IO) {
+        if (initialized) {
+            Logger.i("VBCableManager", "VB-Cable already configured, skipping")
+            return@withContext
+        }
+        
         if (isVBCableInstalled()) {
             Logger.i("VBCableManager", "Virtual Audio Device installed")
             setSystemDefaultMicrophone()
+            initialized = true
+            settings.putBoolean(KEY_CONFIGURED, true)
             return@withContext
         }
         
@@ -126,6 +140,8 @@ object VBCableManager {
                 Logger.i("VBCableManager", "VB-Cable installation verified.")
                 _installProgress.value = strings.installConfiguring
                 setSystemDefaultMicrophone()
+                initialized = true
+                settings.putBoolean(KEY_CONFIGURED, true)
                 _installProgress.value = strings.installConfigComplete
             } else {
                 Logger.w("VBCableManager", "VB-Cable installation could not be verified.")

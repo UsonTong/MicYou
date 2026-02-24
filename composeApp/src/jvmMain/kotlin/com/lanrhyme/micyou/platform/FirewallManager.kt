@@ -15,7 +15,7 @@ object FirewallManager {
             val process = ProcessBuilder(
                 "powershell.exe",
                 "-Command",
-                "(Get-NetFirewallProfile -Profile Domain,Public,Private | Where-Object {$_.Enabled -eq $true}).Count -gt 0"
+                "(Get-NetFirewallProfile -Profile Domain,Public,Private | Where-Object {\${PSItem}.Enabled -eq \$true}).Count -gt 0"
             ).redirectErrorStream(true).start()
             
             val output = process.inputStream.bufferedReader().readText().trim()
