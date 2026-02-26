@@ -48,10 +48,6 @@ configurations.configureEach {
                 useVersion(composeVersion)
             }
         }
-        // 强制使用dorkbox/OS 1.11版本以修复60秒阻塞问题
-        if (requested.group == "com.dorkbox" && requested.name == "OS") {
-            useVersion("1.11")
-        }
     }
 }
 
@@ -101,7 +97,7 @@ kotlin {
             implementation(libs.ktor.client.java)
             implementation("de.maxhenkel.rnnoise4j:rnnoise4j:2.1.2")
             implementation("io.ultreia:bluecove:2.1.1")
-            implementation(libs.systemtray)
+            implementation(libs.composenativetray)
         }
     }
 }
