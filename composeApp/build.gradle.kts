@@ -295,8 +295,8 @@ tasks.matching { it.name in setOf("createDistributable", "createReleaseDistribut
         dependsOn(copyTrayIcon)
     }
 
-// macOS DMG 打包
-tasks.matching { it.name.startsWith("packageDmg") }
+// macOS DMG 打包 (debug 和 release 版本)
+tasks.matching { it.name.contains("Dmg") }
     .configureEach {
         dependsOn(copyTrayIcon)
         dependsOn("createDistributable")
