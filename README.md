@@ -294,6 +294,8 @@ Some languages have special variants:
   <img src="https://contrib.rocks/image?repo=LanRhyme/MicYou" />
 </a>
 
+Made with [contrib.rocks](https://contrib.rocks).
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=lanrhyme/MicYou&type=Date)](https://star-history.com/#lanrhyme/MicYou&Date)
