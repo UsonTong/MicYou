@@ -19,7 +19,7 @@ kotlinx-datetime = "0.7.1"
 material3 = "1.8.0"
 ktor = "3.4.0"
 kotlinx-serialization = "1.8.1"
-systemTray = "4.4"
+composenativetray = "1.1.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -49,8 +49,7 @@ ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "kto
 ktor-client-java = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
-systemtray = { module = "com.dorkbox:SystemTray", version.ref = "systemTray" }
-dorkbox-os = { module = "com.dorkbox:OS", version = "1.11" }
+composenativetray = { module = "io.github.kdroidfilter:composenativetray", version.ref = "composenativetray" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
