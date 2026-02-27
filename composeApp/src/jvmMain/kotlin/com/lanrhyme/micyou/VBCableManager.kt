@@ -219,7 +219,7 @@ object VBCableManager {
     }
 
     private fun downloadAndExtractInstaller(): File? {
-        val downloadUrl = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack43.zip"
+        val downloadUrl = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack45.zip"
         val zipFile = File.createTempFile("vbcable_pack", ".zip")
         val outputDir = File(System.getProperty("java.io.tmpdir"), "vbcable_extracted_${System.currentTimeMillis()}")
         
